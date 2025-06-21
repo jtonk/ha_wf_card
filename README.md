@@ -22,7 +22,7 @@ entity: weather.your_forecast_entity
 
 ## Manual installation
 
-Copy both `ha_wf_card.js` and `ha_wf_card.css` to the `www` folder of your Home Assistant configuration and add the resource reference for the JavaScript file as shown above. The CSS file will be loaded automatically from the same folder.
+Copy the single file `ha_wf_card.js` to the `www` folder of your Home Assistant configuration and add the resource reference for the JavaScript file as shown above. The CSS is embedded inside the script.
 
 ## Card Options
 
