@@ -311,7 +311,7 @@ class HaWfCard extends HTMLElement {
       <ha-card>
           <div class="title-block">
             <div class="icon-title-block">
-              <ha-icon icon="mdi:windsock"></ha-icon>
+              <ha-icon icon="mdi:windsock" id="refresh-icon" style="cursor:pointer" title="Refresh"></ha-icon>
             </div>
             <div class="text-title-block">
               <div class="card-title">${this.config.title || 'Kite Forecast'}</div>
@@ -337,6 +337,15 @@ class HaWfCard extends HTMLElement {
         <div class="footer" id="footer"></div>
       </ha-card>
     `;
+
+    const refreshIcon = this.querySelector('#refresh-icon');
+    if (refreshIcon) {
+      refreshIcon.onclick = () => {
+        if (this._hass) {
+          this._hass.callService('ha_wf', 'refresh', { entity_id: this.config.entity });
+        }
+      };
+    }
 
     this.querySelector("#toggle-night").onchange = () => {
       this._showNight = this.querySelector("#toggle-night").checked;
