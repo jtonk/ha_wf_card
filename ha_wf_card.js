@@ -342,7 +342,7 @@ class HaWfCard extends HTMLElement {
     if (refreshIcon) {
       refreshIcon.onclick = () => {
         if (this._hass) {
-          this._hass.callService('ha_wf', 'refresh', { entity_id: this.config.entity });
+          this._hass.callService('windfinder', 'refresh', { entity_id: this.config.entity });
         }
       };
     }
