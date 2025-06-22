@@ -301,8 +301,7 @@ class HaWfCard extends HTMLElement {
     this._showNight = config.show_night ?? false;
     this._defaultSource = config.default_source || 'forecastdata';
     this._selectedSource = null;
-    this._lastDataString = null;
-    this._lastSource = null;
+    this._lastState = null;
     this._activeDay = null;
 
     this.innerHTML = `
@@ -356,8 +355,6 @@ class HaWfCard extends HTMLElement {
       const checked = this.querySelector("#toggle-source").checked;
       this._selectedSource = checked ? 'superforecastdata' : 'forecastdata';
       //this.querySelector("#source-label").textContent = checked ? 'Superforecast' : 'Forecast';
-      this._lastDataString = null;
-      this._lastSource = null;
       this._updateFromSelectedSource();
     };
 
@@ -367,6 +364,11 @@ class HaWfCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    const entity = this.config.entity;
+    const stateObj = this._hass.states[entity];
+    if (!stateObj) return;
+    if (stateObj.state === this._lastState) return;
+    this._lastState = stateObj.state;
     this._updateFromSelectedSource();
   }
 
@@ -432,13 +434,6 @@ class HaWfCard extends HTMLElement {
       return;
     }
 
-    const newDataString = JSON.stringify(data);
-    if (this._lastDataString === newDataString && this._lastSource === source && this._lastActiveDay === this._activeDay) return;
-
-    this._lastDataString = newDataString;
-    this._lastSource = source;
-    this._lastActiveDay = this._activeDay;
-
     const subtitle = this.querySelector("#subtitle");
     const footer = this.querySelector("#footer");
     const datesRow = this.querySelector("#dates-row");
@@ -446,7 +441,6 @@ class HaWfCard extends HTMLElement {
     const spot_name = stateObj.attributes.spot_name;
     const prefix = source === 'superforecastdata' ? 'superforecast' : 'forecast';
     const generated_at = stateObj.attributes[prefix + '_generated'];
-    const fetched_at = stateObj.attributes[prefix + '_fetched'];
 
     // Parse generation date - use local timezone by default
     let generatedDate = new Date(generated_at);
@@ -468,12 +462,7 @@ class HaWfCard extends HTMLElement {
       hour: '2-digit', minute: '2-digit', hour12: false
     });
 
-    const fetchedDate = new Date(fetched_at);
-    const fetchedStr = isNaN(fetchedDate) ? '?' : fetchedDate.toLocaleTimeString('en-GB', {
-      hour: '2-digit', minute: '2-digit', hour12: false
-    });
-
-    footer.textContent = `Generated ${generatedStr}, Fetched ${fetchedStr}`;
+    footer.textContent = `Generated ${generatedStr}`;
 
 
     footer.classList.toggle('warning', ageHours > 6);
