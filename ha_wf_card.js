@@ -310,7 +310,7 @@ class HaWfCard extends HTMLElement {
       <ha-card>
           <div class="title-block">
             <div class="icon-title-block">
-              <ha-icon icon="mdi:windsock" id="refresh-icon" style="cursor:pointer" title="Refresh"></ha-icon>
+              <ha-icon id="refresh-icon" style="cursor:pointer" title="Refresh"></ha-icon>
             </div>
             <div class="text-title-block">
               <div class="card-title">${this.config.title || 'Kite Forecast'}</div>
@@ -367,6 +367,13 @@ class HaWfCard extends HTMLElement {
     const entity = this.config.entity;
     const stateObj = this._hass.states[entity];
     if (!stateObj) return;
+
+    const refreshIcon = this.querySelector('#refresh-icon');
+    if (refreshIcon) {
+      const icon = stateObj.attributes.icon || 'mdi:windsock';
+      refreshIcon.setAttribute('icon', icon);
+    }
+
     if (stateObj.state === this._lastState) return;
     this._lastState = stateObj.state;
     this._updateFromSelectedSource();
