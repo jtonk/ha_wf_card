@@ -30,6 +30,7 @@ Copy the single file `ha_wf_card.js` to the `www` folder of your Home Assistant 
 - `show_night`: Set to `true` to show night hours.
 - `default_source`: `forecastdata` (default) or `superforecastdata`.
 - `alert`: Alert configuration for highlighting certain wind conditions.
+- The card's icon is taken from the entity's `icon` attribute when available.
 
 ## License
 
