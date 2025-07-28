@@ -300,6 +300,13 @@ class HaWfCard extends HTMLElement {
     this._alertConfig = config.alert || null;
     this._showNight = config.show_night ?? false;
     this._defaultSource = config.default_source || 'forecastdata';
+    if (typeof config.timezone === 'string') {
+      this._timeZone = config.timezone.toLowerCase() === 'utc'
+        ? 'UTC'
+        : config.timezone;
+    } else {
+      this._timeZone = undefined;
+    }
     this._selectedSource = null;
     this._lastState = null;
     this._activeDay = null;
@@ -445,11 +452,12 @@ class HaWfCard extends HTMLElement {
     const footer = this.querySelector("#footer");
     const datesRow = this.querySelector("#dates-row");
     const forecastTable = this.querySelector("#forecast-table");
+    const tzOpt = this._timeZone ? { timeZone: this._timeZone } : {};
     const spot_name = stateObj.attributes.spot_name;
     const prefix = source === 'superforecastdata' ? 'superforecast' : 'forecast';
     const generated_at = stateObj.attributes[prefix + '_generated'];
 
-    // Parse generation date - use local timezone by default
+    // Parse generation date - use local timezone unless timezone config is set
     let generatedDate = new Date(generated_at);
     if (isNaN(generatedDate.getTime())) generatedDate = new Date();
     const now = new Date();
@@ -464,9 +472,9 @@ class HaWfCard extends HTMLElement {
     // })}`;
 
     const generatedStr = generatedDate.toLocaleDateString('en-GB', {
-      weekday: 'short', day: 'numeric', month: 'short'
+      weekday: 'short', day: 'numeric', month: 'short', ...tzOpt
     }) + ' ' + generatedDate.toLocaleTimeString('en-GB', {
-      hour: '2-digit', minute: '2-digit', hour12: false
+      hour: '2-digit', minute: '2-digit', hour12: false, ...tzOpt
     });
 
     footer.textContent = `Generated ${generatedStr}`;
@@ -501,14 +509,14 @@ class HaWfCard extends HTMLElement {
       if (isNaN(dt.getTime())) return;
 
       // Use en-CA for ISO-like yyyy-mm-dd grouping keys
-      const dayKey = dt.toLocaleDateString('en-CA');
+      const dayKey = dt.toLocaleDateString('en-CA', tzOpt);
 
       if (!groupedByDay[dayKey]) groupedByDay[dayKey] = [];
       groupedByDay[dayKey].push(row);
     });
 
     if (!this._activeDay || !groupedByDay[this._activeDay]) {
-      const todayKey = new Date().toLocaleDateString('en-CA');
+      const todayKey = new Date().toLocaleDateString('en-CA', tzOpt);
       this._activeDay = groupedByDay[todayKey] ? todayKey : Object.keys(groupedByDay)[0];
     }
 
@@ -520,6 +528,7 @@ class HaWfCard extends HTMLElement {
         weekday: 'short',
         day: 'numeric',
         month: 'short',
+        ...tzOpt
       });
 
       // Wind bar for this day
@@ -592,7 +601,7 @@ class HaWfCard extends HTMLElement {
       const dt = new Date(row.datetime);
       //const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
       const isAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg);
-      const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, ...tzOpt });
       const timeAlertClass = isAlert ? 'alert' : '';
 
 
