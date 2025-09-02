@@ -611,7 +611,22 @@ class HaWfCard extends HTMLElement {
       const dtTz = this._timeZone ? new Date(dt.toLocaleString('en-US', { timeZone: this._timeZone })) : dt;
       const isAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg);
       const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, ...tzOpt });
-      const isCurrentHour = dtTz.getHours() === nowHour && dtTz.toLocaleDateString('en-CA', tzOpt) === nowDayKey;
+
+      // Highlight logic:
+      // - For superforecast (hourly), highlight when the exact hour matches
+      // - For forecast (3-hourly: 02,05,08,...), highlight when now falls within the row's 3-hour span
+      const sameDay = dtTz.toLocaleDateString('en-CA', tzOpt) === nowDayKey;
+      let isCurrentHour = false;
+      if (source === 'superforecastdata') {
+        isCurrentHour = sameDay && (dtTz.getHours() === nowHour);
+      } else {
+        // Treat each cell as covering [dt, dt + 3h)
+        const rowStart = dtTz.getTime();
+        const rowEnd = rowStart + 3 * 60 * 60 * 1000;
+        const nowMs = nowTz.getTime();
+        isCurrentHour = sameDay && nowMs >= rowStart && nowMs < rowEnd;
+      }
+
       const timeClasses = [isAlert ? 'alert' : '', isCurrentHour ? 'current-hour' : ''].filter(Boolean).join(' ');
 
 
