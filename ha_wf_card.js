@@ -275,6 +275,11 @@ input:checked + .slider:before {
 .forecast-cell-value:first-child.alert {
   border-left: 4px solid red;
 }
+.forecast-cell-value.current-hour {
+  background-color: var(--chip-background-color, #ff0000 );
+  font-weight: bold;
+  color: var(--primary-text-color);
+}
 ha-icon.rotated {
   color: var(--primary-text-color);
   display: inline-block;
@@ -461,6 +466,7 @@ class HaWfCard extends HTMLElement {
     let generatedDate = new Date(generated_at);
     if (isNaN(generatedDate.getTime())) generatedDate = new Date();
     const now = new Date();
+    const nowTz = this._timeZone ? new Date(now.toLocaleString('en-US', { timeZone: this._timeZone })) : now;
     const ageHours = (now - generatedDate) / 36e5;
 
     subtitle.textContent = `${spot_name || 'Unknown location'}`;
@@ -581,6 +587,9 @@ class HaWfCard extends HTMLElement {
       <div class="forecast-body"></div>
     `;
 
+    const nowDayKey = nowTz.toLocaleDateString('en-CA', tzOpt);
+    const nowHour = nowTz.getHours();
+
     // Render forecast body rows for active day (always render night rows)
     const body = forecastTable.querySelector(".forecast-body");
     const rowsHtml = groupedByDay[this._activeDay].map(row => {
@@ -599,10 +608,11 @@ class HaWfCard extends HTMLElement {
 
       // Format time locally
       const dt = new Date(row.datetime);
-      //const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+      const dtTz = this._timeZone ? new Date(dt.toLocaleString('en-US', { timeZone: this._timeZone })) : dt;
       const isAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg);
       const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, ...tzOpt });
-      const timeAlertClass = isAlert ? 'alert' : '';
+      const isCurrentHour = dtTz.getHours() === nowHour && dtTz.toLocaleDateString('en-CA', tzOpt) === nowDayKey;
+      const timeClasses = [isAlert ? 'alert' : '', isCurrentHour ? 'current-hour' : ''].filter(Boolean).join(' ');
 
 
 
@@ -629,7 +639,7 @@ class HaWfCard extends HTMLElement {
 
       return `
         <div class="forecast-row ${nightClass}">
-          <div class="forecast-cell-value ${timeAlertClass}">${timeStr}</div>
+          <div class="forecast-cell-value ${timeClasses}">${timeStr}</div>
 
           ${(() => {
             const bg = getColorForWind(row.wind_speed_kn);
