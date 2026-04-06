@@ -1,6 +1,7 @@
 # ha_wf_card
 
 This repository contains the **ha-wf-card** custom card for Home Assistant. It displays wind and weather forecast information in a compact table with selectable days.
+It is intended to be used with https://github.com/jtonk/ha_wf
 
 ## Installation (HACS)
 
@@ -29,11 +30,30 @@ Copy the single file `ha_wf_card.js` to the `www` folder of your Home Assistant 
 - `entity` (**required**): Weather entity containing forecast attributes.
 - `show_night`: Set to `true` to show night hours.
 - `default_source`: `forecastdata` (default) or `superforecastdata`.
-- `alert`: Alert configuration for highlighting certain wind conditions.
+- `alert`: Alert configuration for highlighting certain wind conditions. see example below
 - `timezone`: Specify a valid [IANA timezone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) such as
   `UTC` or `Europe/Amsterdam` to display all times in that zone. If omitted, times
   are shown in the end user's local timezone.
 - The card's icon is taken from the entity's `icon` attribute when available.
+
+## Example
+
+type: custom:ha-wf-card
+entity: sensor.windfinder_noordwijk
+title: Noordwijk
+show_night: false
+default_source: forecastdata
+timezone: Europe/Amsterdam
+alert:
+  speed_min: 15
+  angles:
+    - from: 0
+      to: 30
+    - from: 210
+      to: 360
+
+<img width="508" height="393" alt="image" src="https://github.com/user-attachments/assets/23316af4-2f7d-425d-95c3-31a6ca0f2d5e" />
+
 
 ## License
 
