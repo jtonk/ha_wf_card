@@ -37,7 +37,7 @@ Copy the single file `ha_wf_card.js` to the `www` folder of your Home Assistant 
 - The card's icon is taken from the entity's `icon` attribute when available.
 
 ## Example
-
+```yaml
 type: custom:ha-wf-card
 entity: sensor.windfinder_noordwijk
 title: Noordwijk
@@ -51,9 +51,8 @@ alert:
       to: 30
     - from: 210
       to: 360
-
-<img width="508" height="393" alt="image" src="https://github.com/user-attachments/assets/23316af4-2f7d-425d-95c3-31a6ca0f2d5e" />
-
+```
+<img width="508" height="393" alt="Description" src="https://raw.githubusercontent.com/jtonk/ha_wf_card/main/574020315-23316af4-2f7d-425d-95c3-31a6ca0f2d5e.png" />
 
 ## License
 
