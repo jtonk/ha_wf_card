@@ -391,9 +391,10 @@ class HaWfCard extends HTMLElement {
     this._updateFromSelectedSource();
   }
 
-  _checkAlertCondition(speed, angleDeg) {
+  _checkAlertCondition(speed, angleDeg, isNightHour = false) {
     const alert = this._alertConfig;
     if (!alert || !Array.isArray(alert.angles)) return false;
+    if (isNightHour) return false;
 
     const minSpeed = alert.speed_min ?? Infinity;
     if (typeof speed !== 'number' || speed < minSpeed || typeof angleDeg !== 'number') return false;
@@ -544,7 +545,7 @@ class HaWfCard extends HTMLElement {
         const gustDif = row.wind_gust_kn - row.wind_speed_kn;
         const gustHeight = gustDif >= 1 ? 1 : 0;
         const gustMargin = gustDif >= 1 ? gustDif: 0;
-        const windBarAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg);
+        const windBarAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg, row.night_hour);
         const windBarClass = `${windBarAlert ? 'alert' : ''}`;
         return `<div class="wind-bar-segment ${windBarClass}">
             <div class="date-wind-bar-segment" style="background:${colorWind};height:${row.wind_speed_kn}px;width:100%;display:inline-block;"></div>
@@ -609,7 +610,7 @@ class HaWfCard extends HTMLElement {
       // Format time locally
       const dt = new Date(row.datetime);
       const dtTz = this._timeZone ? new Date(dt.toLocaleString('en-US', { timeZone: this._timeZone })) : dt;
-      const isAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg);
+      const isAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg, row.night_hour);
       const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, ...tzOpt });
 
       // Highlight logic:

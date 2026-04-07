@@ -30,7 +30,7 @@ Copy the single file `ha_wf_card.js` to the `www` folder of your Home Assistant 
 - `entity` (**required**): Weather entity containing forecast attributes.
 - `show_night`: Set to `true` to show night hours.
 - `default_source`: `forecastdata` (default) or `superforecastdata`.
-- `alert`: Alert configuration for highlighting certain wind conditions. see example below
+- `alert`: Alert configuration for highlighting certain wind conditions during non-night hours only. see example below
 - `timezone`: Specify a valid [IANA timezone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) such as
   `UTC` or `Europe/Amsterdam` to display all times in that zone. If omitted, times
   are shown in the end user's local timezone.
