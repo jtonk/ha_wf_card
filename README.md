@@ -1,4 +1,4 @@
-# ha_wf_card
+# Windfinder Card
 
 This repository contains the **ha-wf-card** custom card for Home Assistant. It displays wind and weather forecast information in a compact table with selectable days.
 It is intended to be used with https://github.com/jtonk/ha_wf
