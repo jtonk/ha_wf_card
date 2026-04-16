@@ -53,8 +53,8 @@ The alert editor includes:
 - an enable/disable toggle
 - a minimum wind speed field
 - quick presets for common wind sectors
-- a compass preview showing the active alert directions
-- editable direction ranges with wrap-around support
+- editable direction ranges with explicit wrap-around support across `0°/360°`
+- Home Assistant-style controls instead of a custom freeform layout
 
 ## Example
 ```yaml

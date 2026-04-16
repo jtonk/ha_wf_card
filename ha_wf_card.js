@@ -807,16 +807,9 @@ const editorCss = `
     font-size: 13px;
     font-weight: 600;
   }
-  input,
-  select {
+  ha-textfield,
+  ha-entity-picker {
     width: 100%;
-    box-sizing: border-box;
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid var(--divider-color);
-    background: var(--card-background-color);
-    color: var(--primary-text-color);
-    font: inherit;
   }
   .toggle-row {
     display: flex;
@@ -827,71 +820,24 @@ const editorCss = `
     border-radius: 14px;
     background: color-mix(in srgb, var(--card-background-color) 85%, var(--primary-color) 15%);
   }
-  .toggle-row input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
+  .toggle-copy {
+    display: grid;
+    gap: 4px;
+  }
+  .toggle-description {
+    font-size: 12px;
+    color: var(--secondary-text-color);
   }
   .alert-layout {
     display: grid;
-    gap: 16px;
-    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
-  }
-  .alert-preview-wrap {
-    display: grid;
-    gap: 12px;
-    align-content: start;
-  }
-  .compass-card {
-    display: grid;
-    justify-items: center;
-    gap: 10px;
-    padding: 16px;
-    border-radius: 18px;
-    background: radial-gradient(circle at center, color-mix(in srgb, var(--card-background-color) 80%, var(--primary-color) 20%) 0 30%, var(--card-background-color) 31% 100%);
-  }
-  .compass {
-    position: relative;
-    width: 220px;
-    height: 220px;
-    border-radius: 50%;
-    border: 1px solid var(--divider-color);
-    background:
-      radial-gradient(circle at center, transparent 0 45px, color-mix(in srgb, var(--divider-color) 50%, transparent) 46px 47px, transparent 48px 100%),
-      var(--alert-preview, conic-gradient(from -90deg, color-mix(in srgb, var(--divider-color) 30%, transparent) 0deg 360deg));
-    box-shadow: inset 0 0 0 18px color-mix(in srgb, var(--card-background-color) 88%, transparent);
-  }
-  .compass::after {
-    content: "";
-    position: absolute;
-    inset: 50%;
-    width: 8px;
-    height: 8px;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    background: var(--primary-text-color);
-  }
-  .compass-marker {
-    position: absolute;
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--secondary-text-color);
-  }
-  .compass-marker.n { top: 10px; left: 50%; transform: translateX(-50%); }
-  .compass-marker.e { right: 12px; top: 50%; transform: translateY(-50%); }
-  .compass-marker.s { bottom: 10px; left: 50%; transform: translateX(-50%); }
-  .compass-marker.w { left: 12px; top: 50%; transform: translateY(-50%); }
-  .alert-summary {
-    font-size: 13px;
-    color: var(--secondary-text-color);
-    text-align: center;
+    gap: 14px;
   }
   .angles-panel {
     display: grid;
     gap: 12px;
     min-width: 0;
   }
-  .preset-row,
-  .angles-list {
+  .preset-row {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
@@ -910,18 +856,6 @@ const editorCss = `
     color: var(--text-primary-color, #fff);
     border-color: var(--primary-color);
   }
-  button.danger {
-    color: var(--error-color);
-  }
-  .angle-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--card-background-color) 80%, var(--primary-color) 20%);
-    font-size: 13px;
-  }
   .range-list {
     display: grid;
     gap: 10px;
@@ -936,6 +870,15 @@ const editorCss = `
     border-radius: 14px;
     background: color-mix(in srgb, var(--card-background-color) 92%, var(--primary-color) 8%);
   }
+  .range-summary {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    color: var(--secondary-text-color);
+  }
+  .remove-range {
+    align-self: center;
+    color: var(--error-color);
+  }
   .field-hint {
     font-size: 12px;
     color: var(--secondary-text-color);
@@ -947,12 +890,8 @@ const editorCss = `
     color: var(--secondary-text-color);
   }
   @media (max-width: 800px) {
-    .alert-layout {
+    .range-row {
       grid-template-columns: 1fr;
-    }
-    .compass {
-      width: 180px;
-      height: 180px;
     }
   }
 `;
@@ -984,13 +923,12 @@ class HaWfCardEditor extends HTMLElement {
 
     const alert = this._normalizeAlert(this._config.alert);
     const alertEnabled = !!alert;
-    const ranges = alert?.angles ?? [];
     const entityPicker = this._hass
       ? `<ha-entity-picker
           data-field="entity"
           allow-custom-entity
         ></ha-entity-picker>`
-      : `<input data-field="entity" type="text" value="${this._escape(this._config.entity ?? '')}" placeholder="sensor.windfinder_noordwijk">`;
+      : `<ha-textfield data-field="entity" value="${this._escape(this._config.entity ?? '')}" placeholder="sensor.windfinder_noordwijk"></ha-textfield>`;
 
     this.shadowRoot.innerHTML = `
       <style>${editorCss}</style>
@@ -1007,35 +945,41 @@ class HaWfCardEditor extends HTMLElement {
             </div>
             <div class="field">
               <label for="title">Title</label>
-              <input id="title" data-field="title" type="text" value="${this._escape(this._config.title ?? '')}" placeholder="Kite Forecast">
+              <ha-textfield id="title" data-field="title" value="${this._escape(this._config.title ?? '')}" placeholder="Kite Forecast"></ha-textfield>
             </div>
-            <div class="field">
-              <label for="default_source">Default source</label>
-              <select id="default_source" data-field="default_source">
-                <option value="forecastdata" ${this._config.default_source !== 'superforecastdata' ? 'selected' : ''}>Forecast</option>
-                <option value="superforecastdata" ${this._config.default_source === 'superforecastdata' ? 'selected' : ''}>Superforecast</option>
-              </select>
+            <div class="toggle-row">
+              <div class="toggle-copy">
+                <label for="default_source_switch">Use superforecast by default</label>
+                <div class="toggle-description">Turn off to start on the regular forecast.</div>
+              </div>
+              <ha-switch id="default_source_switch" data-field="default_source_switch" ${this._config.default_source === 'superforecastdata' ? 'checked' : ''}></ha-switch>
             </div>
             <div class="field">
               <label for="timezone">Timezone</label>
-              <input id="timezone" data-field="timezone" type="text" value="${this._escape(this._config.timezone ?? '')}" placeholder="Europe/Amsterdam">
+              <ha-textfield id="timezone" data-field="timezone" value="${this._escape(this._config.timezone ?? '')}" placeholder="Europe/Amsterdam"></ha-textfield>
               <div class="field-hint">Leave empty to use the viewer's local timezone.</div>
             </div>
           </div>
           <div class="toggle-row">
-            <label for="show_night">Show night hours by default</label>
-            <input id="show_night" data-field="show_night" type="checkbox" ${this._config.show_night ? 'checked' : ''}>
+            <div class="toggle-copy">
+              <label for="show_night">Show night hours by default</label>
+              <div class="toggle-description">Night rows stay available in the card toggle either way.</div>
+            </div>
+            <ha-switch id="show_night" data-field="show_night" ${this._config.show_night ? 'checked' : ''}></ha-switch>
           </div>
         </section>
 
         <section class="section">
           <div class="section-header">
             <div class="section-title">Alert Highlighting</div>
-            <div class="section-description">Highlight forecast periods when wind speed and direction match your preferred sailing window. Alerts only apply to non-night hours in the card.</div>
+            <div class="section-description">Highlight forecast periods when wind speed and direction match your preferred sailing window. If a sector starts above its end value, it wraps around north across 0°/360°.</div>
           </div>
           <div class="toggle-row">
-            <label for="alert_enabled">Enable alert highlighting</label>
-            <input id="alert_enabled" type="checkbox" ${alertEnabled ? 'checked' : ''}>
+            <div class="toggle-copy">
+              <label for="alert_enabled">Enable alert highlighting</label>
+              <div class="toggle-description">Alerts are still limited to non-night hours in the card.</div>
+            </div>
+            <ha-switch id="alert_enabled" ${alertEnabled ? 'checked' : ''}></ha-switch>
           </div>
           ${alertEnabled ? this._renderAlertSection(alert) : ''}
         </section>
@@ -1051,6 +995,16 @@ class HaWfCardEditor extends HTMLElement {
       }
     }
 
+    this.shadowRoot.querySelectorAll('ha-textfield').forEach((field) => {
+      if (field.hasAttribute('value')) {
+        field.value = field.getAttribute('value');
+      }
+    });
+
+    this.shadowRoot.querySelectorAll('ha-switch').forEach((toggle) => {
+      toggle.checked = toggle.hasAttribute('checked');
+    });
+
     this._bindEvents();
   }
 
@@ -1058,25 +1012,14 @@ class HaWfCardEditor extends HTMLElement {
     const ranges = alert.angles ?? [];
     return `
       <div class="alert-layout">
-        <div class="alert-preview-wrap">
-          <div class="compass-card">
-            <div class="compass" style="--alert-preview:${this._buildAlertGradient(ranges)};">
-              <span class="compass-marker n">N</span>
-              <span class="compass-marker e">E</span>
-              <span class="compass-marker s">S</span>
-              <span class="compass-marker w">W</span>
-            </div>
-            <div class="alert-summary">${this._describeAlert(ranges, alert.speed_min)}</div>
-          </div>
-          <div class="field">
-            <label for="alert_speed_min">Minimum wind speed (kn)</label>
-            <input id="alert_speed_min" data-alert-field="speed_min" type="number" min="0" step="1" value="${Number.isFinite(alert.speed_min) ? alert.speed_min : ''}" placeholder="15">
-            <div class="field-hint">Only rows at or above this wind speed are highlighted.</div>
-          </div>
+        <div class="field">
+          <label for="alert_speed_min">Minimum wind speed (kn)</label>
+          <ha-textfield id="alert_speed_min" data-alert-field="speed_min" type="number" min="0" step="1" value="${Number.isFinite(alert.speed_min) ? alert.speed_min : ''}" placeholder="15"></ha-textfield>
+          <div class="field-hint">Only rows at or above this wind speed are highlighted.</div>
         </div>
         <div class="angles-panel">
           <div class="angles-header">Direction ranges</div>
-          <div class="field-hint">Use degrees where 0/360 is north, 90 east, 180 south, and 270 west. Wrap-around ranges such as 300 to 40 are supported.</div>
+          <div class="field-hint">Use degrees where 0/360 is north, 90 east, 180 south, and 270 west. Example: 315 to 45 wraps around 0°/360° and matches north winds.</div>
           <div class="preset-row">
             <button type="button" data-preset="north">North</button>
             <button type="button" data-preset="east">East</button>
@@ -1086,29 +1029,25 @@ class HaWfCardEditor extends HTMLElement {
             <button type="button" data-preset="clear">Clear</button>
           </div>
           ${ranges.length ? `
-            <div class="angles-list">${ranges.map((range, index) => `
-              <span class="angle-chip">
-                ${this._formatRange(range)}
-                <button type="button" class="danger" data-remove-range="${index}">Remove</button>
-              </span>
-            `).join('')}</div>
-          ` : `<div class="empty-state">No direction ranges configured yet.</div>`}
-          <div class="range-list">
+            <div class="range-list">
             ${ranges.map((range, index) => `
               <div class="range-row">
                 <div class="field">
                   <label for="range_from_${index}">From</label>
-                  <input id="range_from_${index}" data-range-index="${index}" data-range-field="from" type="number" min="0" max="360" step="1" value="${this._escape(range.from ?? '')}">
+                  <ha-textfield id="range_from_${index}" data-range-index="${index}" data-range-field="from" type="number" min="0" max="360" step="1" value="${this._escape(range.from ?? '')}"></ha-textfield>
                 </div>
                 <div class="field">
                   <label for="range_to_${index}">To</label>
-                  <input id="range_to_${index}" data-range-index="${index}" data-range-field="to" type="number" min="0" max="360" step="1" value="${this._escape(range.to ?? '')}">
+                  <ha-textfield id="range_to_${index}" data-range-index="${index}" data-range-field="to" type="number" min="0" max="360" step="1" value="${this._escape(range.to ?? '')}"></ha-textfield>
                 </div>
-                <button type="button" class="danger" data-remove-range="${index}">Delete</button>
+                <button type="button" class="remove-range" data-remove-range="${index}">Remove</button>
+                <div class="range-summary">${this._describeRange(range)}</div>
               </div>
             `).join('')}
-          </div>
+            </div>
+          ` : `<div class="empty-state">No direction ranges configured yet.</div>`}
           <button type="button" class="primary" id="add-range">Add direction range</button>
+          <div class="field-hint">${this._describeAlert(ranges, alert.speed_min)}</div>
         </div>
       </div>
     `;
@@ -1118,9 +1057,14 @@ class HaWfCardEditor extends HTMLElement {
     this.shadowRoot.querySelectorAll('[data-field]').forEach((el) => {
       const eventName = el.tagName === 'HA-ENTITY-PICKER'
         ? 'value-changed'
-        : (el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input');
+        : (el.tagName === 'HA-SWITCH' ? 'change' : 'input');
       el.addEventListener(eventName, (ev) => {
-        const value = el.type === 'checkbox' ? el.checked : (ev.detail?.value ?? el.value);
+        let value;
+        if (el.tagName === 'HA-SWITCH') {
+          value = el.checked;
+        } else {
+          value = ev.detail?.value ?? el.value;
+        }
         this._updateConfigValue(el.dataset.field, value);
       });
     });
@@ -1206,6 +1150,8 @@ class HaWfCardEditor extends HTMLElement {
     const next = {};
     if (key === 'title' || key === 'timezone') {
       next[key] = value || undefined;
+    } else if (key === 'default_source_switch') {
+      next.default_source = value ? 'superforecastdata' : 'forecastdata';
     } else {
       next[key] = value;
     }
@@ -1253,41 +1199,6 @@ class HaWfCardEditor extends HTMLElement {
     };
   }
 
-  _buildAlertGradient(ranges) {
-    if (!ranges?.length) {
-      return 'conic-gradient(from -90deg, color-mix(in srgb, var(--divider-color) 25%, transparent) 0deg 360deg)';
-    }
-
-    const normalized = [];
-    ranges.forEach((range) => {
-      if (range.from == null || range.to == null) return;
-      const from = this._normalizeDeg(range.from);
-      const to = this._normalizeDeg(range.to);
-      if (from <= to) {
-        normalized.push([from, to]);
-      } else {
-        normalized.push([from, 360], [0, to]);
-      }
-    });
-
-    normalized.sort((a, b) => a[0] - b[0]);
-
-    const segments = [];
-    let cursor = 0;
-    normalized.forEach(([start, end]) => {
-      if (start > cursor) {
-        segments.push(`color-mix(in srgb, var(--divider-color) 20%, transparent) ${cursor}deg ${start}deg`);
-      }
-      segments.push(`color-mix(in srgb, var(--error-color) 75%, orange) ${start}deg ${end}deg`);
-      cursor = Math.max(cursor, end);
-    });
-    if (cursor < 360) {
-      segments.push(`color-mix(in srgb, var(--divider-color) 20%, transparent) ${cursor}deg 360deg`);
-    }
-
-    return `conic-gradient(from -90deg, ${segments.join(', ')})`;
-  }
-
   _describeAlert(ranges, speedMin) {
     const speedText = Number.isFinite(speedMin) ? `${speedMin}+ kn` : 'any wind speed';
     if (!ranges?.length) {
@@ -1298,6 +1209,21 @@ class HaWfCardEditor extends HTMLElement {
 
   _formatRange(range) {
     return `${this._normalizeDeg(range.from)}° to ${this._normalizeDeg(range.to)}°`;
+  }
+
+  _describeRange(range) {
+    if (range.from == null || range.to == null) {
+      return 'Fill in both values to define the sector.';
+    }
+    const from = this._normalizeDeg(range.from);
+    const to = this._normalizeDeg(range.to);
+    if (from === to) {
+      return `${from}° matches only that exact direction.`;
+    }
+    if (from > to) {
+      return `${from}° to ${to}° wraps around north across 0°/360°.`;
+    }
+    return `${from}° to ${to}° stays within the standard clockwise range.`;
   }
 
   _normalizeDeg(value) {
