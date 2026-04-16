@@ -808,7 +808,6 @@ const editorCss = `
     font-weight: 600;
   }
   ha-textfield,
-  ha-entity-picker,
   ha-combo-box {
     width: 100%;
   }
@@ -842,13 +841,25 @@ const editorCss = `
     padding-top: 6px;
   }
   .alert-circle {
+    position: relative;
     width: 160px;
     height: 160px;
     border-radius: 50%;
     border: 1px solid var(--divider-color);
     background:
       radial-gradient(circle at center, var(--card-background-color) 0 34px, transparent 35px),
-      var(--alert-preview, conic-gradient(from -90deg, transparent 0deg 360deg));
+      var(--alert-preview, conic-gradient(transparent 0deg 360deg));
+  }
+  .alert-circle::before {
+    content: "";
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    width: 2px;
+    height: 14px;
+    transform: translateX(-50%);
+    background: var(--primary-text-color);
+    border-radius: 999px;
   }
   .alert-caption {
     font-size: 12px;
@@ -924,9 +935,9 @@ class HaWfCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    const picker = this.shadowRoot?.querySelector('ha-entity-picker');
+    const picker = this.shadowRoot?.querySelector('#entity');
     if (picker) {
-      picker.hass = hass;
+      picker.items = this._getEntityOptions();
     }
   }
 
@@ -942,12 +953,6 @@ class HaWfCardEditor extends HTMLElement {
 
     const alert = this._normalizeAlert(this._config.alert);
     const alertEnabled = !!alert;
-    const entityPicker = this._hass
-      ? `<ha-entity-picker
-          data-field="entity"
-          allow-custom-entity
-        ></ha-entity-picker>`
-      : `<ha-textfield data-field="entity" value="${this._escape(this._config.entity ?? '')}" placeholder="sensor.windfinder_noordwijk"></ha-textfield>`;
 
     this.shadowRoot.innerHTML = `
       <style>${editorCss}</style>
@@ -960,7 +965,13 @@ class HaWfCardEditor extends HTMLElement {
           <div class="field-stack">
             <div class="field">
               <label>Entity</label>
-              ${entityPicker}
+              <ha-combo-box
+                id="entity"
+                data-field="entity"
+                item-label-path="label"
+                item-value-path="value"
+              ></ha-combo-box>
+              <div class="field-hint">Search by entity id or friendly name.</div>
             </div>
             <div class="field">
               <label for="title">Title</label>
@@ -1007,13 +1018,11 @@ class HaWfCardEditor extends HTMLElement {
       </div>
     `;
 
-    if (this._hass) {
-      const picker = this.shadowRoot.querySelector('ha-entity-picker');
-      if (picker) {
-        picker.hass = this._hass;
-        picker.value = this._config.entity ?? '';
-        picker.configValue = 'entity';
-      }
+    const entityPicker = this.shadowRoot.querySelector('#entity');
+    if (entityPicker) {
+      entityPicker.items = this._getEntityOptions();
+      entityPicker.value = this._config.entity ?? '';
+      entityPicker.allowCustomValue = true;
     }
 
     const timezonePicker = this.shadowRoot.querySelector('#timezone');
@@ -1081,9 +1090,7 @@ class HaWfCardEditor extends HTMLElement {
 
   _bindEvents() {
     this.shadowRoot.querySelectorAll('[data-field]').forEach((el) => {
-      const eventName = el.tagName === 'HA-ENTITY-PICKER'
-        ? 'value-changed'
-        : 'change';
+      const eventName = 'change';
       el.addEventListener(eventName, (ev) => {
         let value;
         if (el.tagName === 'HA-SWITCH') {
@@ -1228,7 +1235,7 @@ class HaWfCardEditor extends HTMLElement {
     });
 
     if (!normalized.length) {
-      return 'conic-gradient(from -90deg, color-mix(in srgb, var(--divider-color) 18%, transparent) 0deg 360deg)';
+      return 'conic-gradient(color-mix(in srgb, var(--divider-color) 18%, transparent) 0deg 360deg)';
     }
 
     normalized.sort((a, b) => a[0] - b[0]);
@@ -1244,7 +1251,7 @@ class HaWfCardEditor extends HTMLElement {
       segments.push(`color-mix(in srgb, var(--divider-color) 12%, transparent) ${cursor}deg 360deg`);
     }
 
-    return `conic-gradient(from -90deg, ${segments.join(', ')})`;
+    return `conic-gradient(${segments.join(', ')})`;
   }
 
   _getTimeZoneOptions() {
@@ -1258,6 +1265,25 @@ class HaWfCardEditor extends HTMLElement {
       ];
     }
     return this._timeZoneOptions;
+  }
+
+  _getEntityOptions() {
+    if (!this._hass?.states) {
+      return [];
+    }
+
+    return Object.values(this._hass.states)
+      .map((stateObj) => {
+        const entityId = stateObj.entity_id;
+        const friendlyName = stateObj.attributes?.friendly_name;
+        return {
+          value: entityId,
+          label: friendlyName && friendlyName !== entityId
+            ? `${friendlyName} (${entityId})`
+            : entityId,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
   }
 
   _formatRange(range) {
