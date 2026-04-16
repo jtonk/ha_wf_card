@@ -767,25 +767,25 @@ const editorCss = `
   }
   .editor {
     display: grid;
-    gap: 16px;
-    padding: 16px;
-    color: var(--primary-text-color);
+    gap: 12px;
   }
   .section {
     display: grid;
     gap: 12px;
-    padding: 16px;
-    border: 1px solid var(--divider-color);
-    border-radius: 16px;
-    background:
-      linear-gradient(180deg, color-mix(in srgb, var(--card-background-color) 92%, var(--primary-color) 8%), var(--card-background-color));
+    padding: 16px 0 0;
+    border-top: 1px solid var(--divider-color);
+  }
+  .section:first-child {
+    padding-top: 0;
+    border-top: 0;
   }
   .section-header {
     display: grid;
     gap: 4px;
+    padding: 0 16px;
   }
   .section-title {
-    font-size: 16px;
+    font-size: 1rem;
     font-weight: 600;
   }
   .section-description {
@@ -794,8 +794,9 @@ const editorCss = `
   }
   .field-grid {
     display: grid;
-    gap: 12px;
+    gap: 16px;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    padding: 0 16px;
   }
   .field {
     display: grid;
@@ -816,9 +817,7 @@ const editorCss = `
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 12px 14px;
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--card-background-color) 85%, var(--primary-color) 15%);
+    padding: 0 16px;
   }
   .toggle-copy {
     display: grid;
@@ -831,21 +830,43 @@ const editorCss = `
   .alert-layout {
     display: grid;
     gap: 14px;
+    padding: 0 16px 16px;
   }
   .angles-panel {
     display: grid;
     gap: 12px;
     min-width: 0;
   }
-  .preset-row {
-    display: flex;
-    flex-wrap: wrap;
+  .alert-top {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    align-items: start;
+  }
+  .alert-preview {
+    display: grid;
+    justify-items: center;
     gap: 8px;
+    padding-top: 6px;
+  }
+  .alert-circle {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    border: 1px solid var(--divider-color);
+    background:
+      radial-gradient(circle at center, var(--card-background-color) 0 34px, transparent 35px),
+      var(--alert-preview, conic-gradient(from -90deg, transparent 0deg 360deg));
+  }
+  .alert-caption {
+    font-size: 12px;
+    color: var(--secondary-text-color);
+    text-align: center;
   }
   button {
     font: inherit;
     border: 1px solid var(--divider-color);
-    border-radius: 999px;
+    border-radius: 10px;
     background: var(--card-background-color);
     color: var(--primary-text-color);
     padding: 8px 12px;
@@ -867,8 +888,8 @@ const editorCss = `
     align-items: end;
     padding: 12px;
     border: 1px solid var(--divider-color);
-    border-radius: 14px;
-    background: color-mix(in srgb, var(--card-background-color) 92%, var(--primary-color) 8%);
+    border-radius: 12px;
+    background: var(--card-background-color);
   }
   .range-summary {
     grid-column: 1 / -1;
@@ -890,6 +911,9 @@ const editorCss = `
     color: var(--secondary-text-color);
   }
   @media (max-width: 800px) {
+    .alert-top {
+      grid-template-columns: 1fr;
+    }
     .range-row {
       grid-template-columns: 1fr;
     }
@@ -903,6 +927,10 @@ class HaWfCardEditor extends HTMLElement {
       default_source: 'forecastdata',
       ...config,
     };
+    if (!this.shadowRoot || !this.shadowRoot.innerHTML) {
+      this._render();
+      return;
+    }
     this._render();
   }
 
@@ -1012,22 +1040,20 @@ class HaWfCardEditor extends HTMLElement {
     const ranges = alert.angles ?? [];
     return `
       <div class="alert-layout">
-        <div class="field">
-          <label for="alert_speed_min">Minimum wind speed (kn)</label>
-          <ha-textfield id="alert_speed_min" data-alert-field="speed_min" type="number" min="0" step="1" value="${Number.isFinite(alert.speed_min) ? alert.speed_min : ''}" placeholder="15"></ha-textfield>
-          <div class="field-hint">Only rows at or above this wind speed are highlighted.</div>
+        <div class="alert-top">
+          <div class="field">
+            <label for="alert_speed_min">Minimum wind speed (kn)</label>
+            <ha-textfield id="alert_speed_min" data-alert-field="speed_min" type="number" min="0" step="1" value="${Number.isFinite(alert.speed_min) ? alert.speed_min : ''}" placeholder="15"></ha-textfield>
+            <div class="field-hint">Only rows at or above this wind speed are highlighted.</div>
+          </div>
+          <div class="alert-preview">
+            <div class="alert-circle" style="--alert-preview: ${this._buildAlertPreview(ranges)};"></div>
+            <div class="alert-caption">0°/360° is at the top. A range like 315° to 45° wraps around north.</div>
+          </div>
         </div>
         <div class="angles-panel">
           <div class="angles-header">Direction ranges</div>
-          <div class="field-hint">Use degrees where 0/360 is north, 90 east, 180 south, and 270 west. Example: 315 to 45 wraps around 0°/360° and matches north winds.</div>
-          <div class="preset-row">
-            <button type="button" data-preset="north">North</button>
-            <button type="button" data-preset="east">East</button>
-            <button type="button" data-preset="south">South</button>
-            <button type="button" data-preset="west">West</button>
-            <button type="button" data-preset="cross">Cross-shore pair</button>
-            <button type="button" data-preset="clear">Clear</button>
-          </div>
+          <div class="field-hint">Use degrees where 0/360 is north, 90 east, 180 south, and 270 west.</div>
           ${ranges.length ? `
             <div class="range-list">
             ${ranges.map((range, index) => `
@@ -1057,7 +1083,7 @@ class HaWfCardEditor extends HTMLElement {
     this.shadowRoot.querySelectorAll('[data-field]').forEach((el) => {
       const eventName = el.tagName === 'HA-ENTITY-PICKER'
         ? 'value-changed'
-        : (el.tagName === 'HA-SWITCH' ? 'change' : 'input');
+        : 'change';
       el.addEventListener(eventName, (ev) => {
         let value;
         if (el.tagName === 'HA-SWITCH') {
@@ -1074,22 +1100,22 @@ class HaWfCardEditor extends HTMLElement {
       alertToggle.addEventListener('change', () => {
         this._updateConfig({
           alert: alertToggle.checked ? { speed_min: 15, angles: [] } : undefined,
-        });
+        }, { render: true });
       });
     }
 
     const speedInput = this.shadowRoot.querySelector('[data-alert-field="speed_min"]');
     if (speedInput) {
-      speedInput.addEventListener('input', () => {
+      speedInput.addEventListener('change', () => {
         const nextAlert = this._normalizeAlert(this._config.alert) ?? { angles: [] };
         const value = speedInput.value === '' ? undefined : Number(speedInput.value);
         nextAlert.speed_min = Number.isFinite(value) ? value : undefined;
-        this._updateConfig({ alert: this._compactAlert(nextAlert) });
+        this._updateConfig({ alert: this._compactAlert(nextAlert) }, { render: true });
       });
     }
 
     this.shadowRoot.querySelectorAll('[data-range-field]').forEach((input) => {
-      input.addEventListener('input', () => {
+      input.addEventListener('change', () => {
         const index = Number(input.dataset.rangeIndex);
         const field = input.dataset.rangeField;
         const nextAlert = this._normalizeAlert(this._config.alert) ?? { angles: [] };
@@ -1098,7 +1124,7 @@ class HaWfCardEditor extends HTMLElement {
         nextRange[field] = input.value === '' ? undefined : Number(input.value);
         nextAngles[index] = nextRange;
         nextAlert.angles = nextAngles;
-        this._updateConfig({ alert: this._compactAlert(nextAlert) });
+        this._updateConfig({ alert: this._compactAlert(nextAlert) }, { render: true });
       });
     });
 
@@ -1107,7 +1133,7 @@ class HaWfCardEditor extends HTMLElement {
         const index = Number(button.dataset.removeRange);
         const nextAlert = this._normalizeAlert(this._config.alert) ?? { angles: [] };
         nextAlert.angles = (nextAlert.angles ?? []).filter((_, i) => i !== index);
-        this._updateConfig({ alert: this._compactAlert(nextAlert) });
+        this._updateConfig({ alert: this._compactAlert(nextAlert) }, { render: true });
       });
     });
 
@@ -1116,34 +1142,9 @@ class HaWfCardEditor extends HTMLElement {
       addButton.addEventListener('click', () => {
         const nextAlert = this._normalizeAlert(this._config.alert) ?? { speed_min: 15, angles: [] };
         nextAlert.angles = [...(nextAlert.angles ?? []), { from: 0, to: 30 }];
-        this._updateConfig({ alert: this._compactAlert(nextAlert) });
+        this._updateConfig({ alert: this._compactAlert(nextAlert) }, { render: true });
       });
     }
-
-    this.shadowRoot.querySelectorAll('[data-preset]').forEach((button) => {
-      button.addEventListener('click', () => {
-        this._applyPreset(button.dataset.preset);
-      });
-    });
-  }
-
-  _applyPreset(preset) {
-    if (preset === 'clear') {
-      this._updateConfig({ alert: { ...this._normalizeAlert(this._config.alert), angles: [] } });
-      return;
-    }
-
-    const presets = {
-      north: [{ from: 315, to: 45 }],
-      east: [{ from: 45, to: 135 }],
-      south: [{ from: 135, to: 225 }],
-      west: [{ from: 225, to: 315 }],
-      cross: [{ from: 45, to: 135 }, { from: 225, to: 315 }],
-    };
-
-    const nextAlert = this._normalizeAlert(this._config.alert) ?? { speed_min: 15, angles: [] };
-    nextAlert.angles = presets[preset] ?? nextAlert.angles ?? [];
-    this._updateConfig({ alert: this._compactAlert(nextAlert) });
   }
 
   _updateConfigValue(key, value) {
@@ -1158,7 +1159,7 @@ class HaWfCardEditor extends HTMLElement {
     this._updateConfig(next);
   }
 
-  _updateConfig(changes) {
+  _updateConfig(changes, options = {}) {
     this._config = {
       ...this._config,
       ...changes,
@@ -1174,7 +1175,9 @@ class HaWfCardEditor extends HTMLElement {
       composed: true,
     }));
 
-    this._render();
+    if (options.render) {
+      this._render();
+    }
   }
 
   _normalizeAlert(alert) {
@@ -1205,6 +1208,41 @@ class HaWfCardEditor extends HTMLElement {
       return `Alerting enabled for ${speedText}, but no wind direction ranges are selected yet.`;
     }
     return `${speedText} from ${ranges.map((range) => this._formatRange(range)).join(', ')}.`;
+  }
+
+  _buildAlertPreview(ranges) {
+    const segments = [];
+    const normalized = [];
+
+    (ranges ?? []).forEach((range) => {
+      if (range.from == null || range.to == null) return;
+      const from = this._normalizeDeg(range.from);
+      const to = this._normalizeDeg(range.to);
+      if (from <= to) {
+        normalized.push([from, to]);
+      } else {
+        normalized.push([from, 360], [0, to]);
+      }
+    });
+
+    if (!normalized.length) {
+      return 'conic-gradient(from -90deg, color-mix(in srgb, var(--divider-color) 18%, transparent) 0deg 360deg)';
+    }
+
+    normalized.sort((a, b) => a[0] - b[0]);
+    let cursor = 0;
+    normalized.forEach(([start, end]) => {
+      if (start > cursor) {
+        segments.push(`color-mix(in srgb, var(--divider-color) 12%, transparent) ${cursor}deg ${start}deg`);
+      }
+      segments.push(`color-mix(in srgb, var(--warning-color, var(--accent-color)) 65%, transparent) ${start}deg ${end}deg`);
+      cursor = Math.max(cursor, end);
+    });
+    if (cursor < 360) {
+      segments.push(`color-mix(in srgb, var(--divider-color) 12%, transparent) ${cursor}deg 360deg`);
+    }
+
+    return `conic-gradient(from -90deg, ${segments.join(', ')})`;
   }
 
   _formatRange(range) {
