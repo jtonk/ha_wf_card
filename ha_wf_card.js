@@ -792,10 +792,9 @@ const editorCss = `
     font-size: 13px;
     color: var(--secondary-text-color);
   }
-  .field-grid {
+  .field-stack {
     display: grid;
     gap: 16px;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
     padding: 0 16px;
   }
   .field {
@@ -809,23 +808,16 @@ const editorCss = `
     font-weight: 600;
   }
   ha-textfield,
-  ha-entity-picker {
+  ha-entity-picker,
+  ha-combo-box {
     width: 100%;
   }
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+  .switch-field {
     padding: 0 16px;
   }
-  .toggle-copy {
-    display: grid;
-    gap: 4px;
-  }
-  .toggle-description {
-    font-size: 12px;
-    color: var(--secondary-text-color);
+  ha-formfield {
+    display: block;
+    --ha-formfield-label-font-size: 14px;
   }
   .alert-layout {
     display: grid;
@@ -927,16 +919,15 @@ class HaWfCardEditor extends HTMLElement {
       default_source: 'forecastdata',
       ...config,
     };
-    if (!this.shadowRoot || !this.shadowRoot.innerHTML) {
-      this._render();
-      return;
-    }
     this._render();
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (this.isConnected) this._render();
+    const picker = this.shadowRoot?.querySelector('ha-entity-picker');
+    if (picker) {
+      picker.hass = hass;
+    }
   }
 
   connectedCallback() {
@@ -966,7 +957,7 @@ class HaWfCardEditor extends HTMLElement {
             <div class="section-title">Card Setup</div>
             <div class="section-description">Select the Windfinder entity and the default display behavior.</div>
           </div>
-          <div class="field-grid">
+          <div class="field-stack">
             <div class="field">
               <label>Entity</label>
               ${entityPicker}
@@ -975,25 +966,28 @@ class HaWfCardEditor extends HTMLElement {
               <label for="title">Title</label>
               <ha-textfield id="title" data-field="title" value="${this._escape(this._config.title ?? '')}" placeholder="Kite Forecast"></ha-textfield>
             </div>
-            <div class="toggle-row">
-              <div class="toggle-copy">
-                <label for="default_source_switch">Use superforecast by default</label>
-                <div class="toggle-description">Turn off to start on the regular forecast.</div>
-              </div>
-              <ha-switch id="default_source_switch" data-field="default_source_switch" ${this._config.default_source === 'superforecastdata' ? 'checked' : ''}></ha-switch>
+            <div class="field switch-field">
+              <ha-formfield label="Superforecast by default">
+                <ha-switch id="default_source_switch" data-field="default_source_switch" ${this._config.default_source === 'superforecastdata' ? 'checked' : ''}></ha-switch>
+              </ha-formfield>
+              <div class="field-hint">Turn this off to start on the regular forecast.</div>
             </div>
             <div class="field">
               <label for="timezone">Timezone</label>
-              <ha-textfield id="timezone" data-field="timezone" value="${this._escape(this._config.timezone ?? '')}" placeholder="Europe/Amsterdam"></ha-textfield>
-              <div class="field-hint">Leave empty to use the viewer's local timezone.</div>
+              <ha-combo-box
+                id="timezone"
+                data-field="timezone"
+                item-label-path="label"
+                item-value-path="value"
+              ></ha-combo-box>
+              <div class="field-hint">Default (current) uses the viewer's timezone.</div>
             </div>
-          </div>
-          <div class="toggle-row">
-            <div class="toggle-copy">
-              <label for="show_night">Show night hours by default</label>
-              <div class="toggle-description">Night rows stay available in the card toggle either way.</div>
+            <div class="field switch-field">
+              <ha-formfield label="Show night hours by default">
+                <ha-switch id="show_night" data-field="show_night" ${this._config.show_night ? 'checked' : ''}></ha-switch>
+              </ha-formfield>
+              <div class="field-hint">Night rows stay available in the card toggle either way.</div>
             </div>
-            <ha-switch id="show_night" data-field="show_night" ${this._config.show_night ? 'checked' : ''}></ha-switch>
           </div>
         </section>
 
@@ -1002,12 +996,11 @@ class HaWfCardEditor extends HTMLElement {
             <div class="section-title">Alert Highlighting</div>
             <div class="section-description">Highlight forecast periods when wind speed and direction match your preferred sailing window. If a sector starts above its end value, it wraps around north across 0°/360°.</div>
           </div>
-          <div class="toggle-row">
-            <div class="toggle-copy">
-              <label for="alert_enabled">Enable alert highlighting</label>
-              <div class="toggle-description">Alerts are still limited to non-night hours in the card.</div>
-            </div>
-            <ha-switch id="alert_enabled" ${alertEnabled ? 'checked' : ''}></ha-switch>
+          <div class="field switch-field">
+            <ha-formfield label="Enable alert highlighting">
+              <ha-switch id="alert_enabled" ${alertEnabled ? 'checked' : ''}></ha-switch>
+            </ha-formfield>
+            <div class="field-hint">Alerts are still limited to non-night hours in the card.</div>
           </div>
           ${alertEnabled ? this._renderAlertSection(alert) : ''}
         </section>
@@ -1021,6 +1014,13 @@ class HaWfCardEditor extends HTMLElement {
         picker.value = this._config.entity ?? '';
         picker.configValue = 'entity';
       }
+    }
+
+    const timezonePicker = this.shadowRoot.querySelector('#timezone');
+    if (timezonePicker) {
+      timezonePicker.items = this._getTimeZoneOptions();
+      timezonePicker.value = this._config.timezone ?? '__default__';
+      timezonePicker.allowCustomValue = false;
     }
 
     this.shadowRoot.querySelectorAll('ha-textfield').forEach((field) => {
@@ -1149,8 +1149,10 @@ class HaWfCardEditor extends HTMLElement {
 
   _updateConfigValue(key, value) {
     const next = {};
-    if (key === 'title' || key === 'timezone') {
+    if (key === 'title') {
       next[key] = value || undefined;
+    } else if (key === 'timezone') {
+      next.timezone = !value || value === '__default__' ? undefined : value;
     } else if (key === 'default_source_switch') {
       next.default_source = value ? 'superforecastdata' : 'forecastdata';
     } else {
@@ -1243,6 +1245,19 @@ class HaWfCardEditor extends HTMLElement {
     }
 
     return `conic-gradient(from -90deg, ${segments.join(', ')})`;
+  }
+
+  _getTimeZoneOptions() {
+    if (!this._timeZoneOptions) {
+      const values = typeof Intl?.supportedValuesOf === 'function'
+        ? Intl.supportedValuesOf('timeZone')
+        : [];
+      this._timeZoneOptions = [
+        { label: 'Default (current)', value: '__default__' },
+        ...values.map((timeZone) => ({ label: timeZone, value: timeZone })),
+      ];
+    }
+    return this._timeZoneOptions;
   }
 
   _formatRange(range) {
