@@ -808,7 +808,7 @@ const editorCss = `
     font-weight: 600;
   }
   ha-textfield,
-  ha-combo-box {
+  ha-form {
     width: 100%;
   }
   .switch-field {
@@ -935,10 +935,8 @@ class HaWfCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    const picker = this.shadowRoot?.querySelector('#entity');
-    if (picker) {
-      picker.items = this._getEntityOptions();
-    }
+    this._setupEntityForm();
+    this._setupTimeZoneForm();
   }
 
   connectedCallback() {
@@ -964,13 +962,7 @@ class HaWfCardEditor extends HTMLElement {
           </div>
           <div class="field-stack">
             <div class="field">
-              <label>Entity</label>
-              <ha-combo-box
-                id="entity"
-                data-field="entity"
-                item-label-path="label"
-                item-value-path="value"
-              ></ha-combo-box>
+              <ha-form id="entity-form"></ha-form>
               <div class="field-hint">Search by entity id or friendly name.</div>
             </div>
             <div class="field">
@@ -984,13 +976,7 @@ class HaWfCardEditor extends HTMLElement {
               <div class="field-hint">Turn this off to start on the regular forecast.</div>
             </div>
             <div class="field">
-              <label for="timezone">Timezone</label>
-              <ha-combo-box
-                id="timezone"
-                data-field="timezone"
-                item-label-path="label"
-                item-value-path="value"
-              ></ha-combo-box>
+              <ha-form id="timezone-form"></ha-form>
               <div class="field-hint">Default (current) uses the viewer's timezone.</div>
             </div>
             <div class="field switch-field">
@@ -1005,32 +991,21 @@ class HaWfCardEditor extends HTMLElement {
         <section class="section">
           <div class="section-header">
             <div class="section-title">Alert Highlighting</div>
-            <div class="section-description">Highlight forecast periods when wind speed and direction match your preferred sailing window. If a sector starts above its end value, it wraps around north across 0°/360°.</div>
+            <div class="section-description">Highlight forecast periods when wind speed and direction match your preferred sailing window.</div>
           </div>
           <div class="field switch-field">
             <ha-formfield label="Enable alert highlighting">
               <ha-switch id="alert_enabled" ${alertEnabled ? 'checked' : ''}></ha-switch>
             </ha-formfield>
-            <div class="field-hint">Alerts are still limited to non-night hours in the card.</div>
+            <div class="field-hint">Alerts are limited to non-night hours in the card.</div>
           </div>
           ${alertEnabled ? this._renderAlertSection(alert) : ''}
         </section>
       </div>
     `;
 
-    const entityPicker = this.shadowRoot.querySelector('#entity');
-    if (entityPicker) {
-      entityPicker.items = this._getEntityOptions();
-      entityPicker.value = this._config.entity ?? '';
-      entityPicker.allowCustomValue = true;
-    }
-
-    const timezonePicker = this.shadowRoot.querySelector('#timezone');
-    if (timezonePicker) {
-      timezonePicker.items = this._getTimeZoneOptions();
-      timezonePicker.value = this._config.timezone ?? '__default__';
-      timezonePicker.allowCustomValue = false;
-    }
+    this._setupEntityForm();
+    this._setupTimeZoneForm();
 
     this.shadowRoot.querySelectorAll('ha-textfield').forEach((field) => {
       if (field.hasAttribute('value')) {
@@ -1154,6 +1129,56 @@ class HaWfCardEditor extends HTMLElement {
     }
   }
 
+  _setupEntityForm() {
+    const form = this.shadowRoot?.querySelector('#entity-form');
+    if (!form) return;
+
+    form.hass = this._hass;
+    form.data = { entity: this._config.entity ?? '' };
+    form.schema = [{ name: 'entity', required: true, selector: { entity: {} } }];
+    form.computeLabel = (schema) => schema.name === 'entity' ? 'Entity' : schema.name;
+
+    if (this._onEntityFormChanged) {
+      form.removeEventListener('value-changed', this._onEntityFormChanged);
+    }
+
+    this._onEntityFormChanged = (ev) => {
+      ev.stopPropagation();
+      this._updateConfigValue('entity', ev.detail?.value?.entity);
+    };
+
+    form.addEventListener('value-changed', this._onEntityFormChanged);
+  }
+
+  _setupTimeZoneForm() {
+    const form = this.shadowRoot?.querySelector('#timezone-form');
+    if (!form) return;
+
+    form.hass = this._hass;
+    form.data = { timezone: this._config.timezone ?? '__default__' };
+    form.schema = [{
+      name: 'timezone',
+      selector: {
+        select: {
+          mode: 'dropdown',
+          options: this._getTimeZoneOptions(),
+        },
+      },
+    }];
+    form.computeLabel = (schema) => schema.name === 'timezone' ? 'Timezone' : schema.name;
+
+    if (this._onTimeZoneFormChanged) {
+      form.removeEventListener('value-changed', this._onTimeZoneFormChanged);
+    }
+
+    this._onTimeZoneFormChanged = (ev) => {
+      ev.stopPropagation();
+      this._updateConfigValue('timezone', ev.detail?.value?.timezone);
+    };
+
+    form.addEventListener('value-changed', this._onTimeZoneFormChanged);
+  }
+
   _updateConfigValue(key, value) {
     const next = {};
     if (key === 'title') {
@@ -1244,7 +1269,7 @@ class HaWfCardEditor extends HTMLElement {
       if (start > cursor) {
         segments.push(`color-mix(in srgb, var(--divider-color) 12%, transparent) ${cursor}deg ${start}deg`);
       }
-      segments.push(`color-mix(in srgb, var(--warning-color, var(--accent-color)) 65%, transparent) ${start}deg ${end}deg`);
+      segments.push(`color-mix(in srgb, var(--accent-color, var(--primary-color)) 65%, transparent) ${start}deg ${end}deg`);
       cursor = Math.max(cursor, end);
     });
     if (cursor < 360) {
@@ -1265,25 +1290,6 @@ class HaWfCardEditor extends HTMLElement {
       ];
     }
     return this._timeZoneOptions;
-  }
-
-  _getEntityOptions() {
-    if (!this._hass?.states) {
-      return [];
-    }
-
-    return Object.values(this._hass.states)
-      .map((stateObj) => {
-        const entityId = stateObj.entity_id;
-        const friendlyName = stateObj.attributes?.friendly_name;
-        return {
-          value: entityId,
-          label: friendlyName && friendlyName !== entityId
-            ? `${friendlyName} (${entityId})`
-            : entityId,
-        };
-      })
-      .sort((a, b) => a.label.localeCompare(b.label));
   }
 
   _formatRange(range) {
