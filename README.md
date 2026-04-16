@@ -74,6 +74,17 @@ alert:
 ```
 <img width="508" height="393" alt="Description" src="https://raw.githubusercontent.com/jtonk/ha_wf_card/main/574020315-23316af4-2f7d-425d-95c3-31a6ca0f2d5e.png" />
 
+In Home Assistant sections view, the card now reports a fixed full-width layout of `12` columns and computes its height in Home Assistant row steps based on the rendered content. That lets the card grow or shrink when the visible forecast rows change, including when night hours are hidden.
+
+If you manually set `grid_options.rows` in your dashboard YAML, Home Assistant will force that height and override the automatic row calculation. To keep the stepped auto-sizing, omit `rows` and only set `columns: 12` if you want to be explicit:
+
+```yaml
+type: custom:ha-wf-card
+entity: sensor.windfinder_noordwijk
+grid_options:
+  columns: 12
+```
+
 ## License
 
 MIT

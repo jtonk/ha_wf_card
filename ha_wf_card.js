@@ -205,7 +205,6 @@ input:checked + .slider:before {
   margin-right: 1px;
 }
 
-
 /* Forecast table container */
 .forecast-table {
   display: table;
@@ -298,6 +297,12 @@ ha-icon.rotated {
 
 
 `;
+const FIXED_GRID_COLUMNS = 12;
+const DEFAULT_GRID_ROWS = 8;
+const GRID_ROW_PX = 56;
+const GRID_GAP_PX = 8;
+const GRID_STEP_PX = GRID_ROW_PX + GRID_GAP_PX;
+
 class HaWfCard extends HTMLElement {
   setConfig(config) {
     if (!config.entity) throw new Error("Entity is required");
@@ -315,6 +320,8 @@ class HaWfCard extends HTMLElement {
     this._selectedSource = null;
     this._lastState = null;
     this._activeDay = null;
+    this._gridRows = DEFAULT_GRID_ROWS;
+    this._gridRowSyncFrame = 0;
 
     this.innerHTML = `
       <style>${css}</style>
@@ -372,6 +379,25 @@ class HaWfCard extends HTMLElement {
 
     // Initialize selected source
     //this._selectedSource = this._defaultSource;
+  }
+
+  getGridOptions() {
+    const rows = this._gridRows || DEFAULT_GRID_ROWS;
+    return {
+      columns: FIXED_GRID_COLUMNS,
+      min_columns: FIXED_GRID_COLUMNS,
+      max_columns: FIXED_GRID_COLUMNS,
+      rows,
+      min_rows: rows,
+      max_rows: rows,
+    };
+  }
+
+  disconnectedCallback() {
+    if (this._gridRowSyncFrame) {
+      cancelAnimationFrame(this._gridRowSyncFrame);
+      this._gridRowSyncFrame = 0;
+    }
   }
 
   set hass(hass) {
@@ -734,6 +760,27 @@ class HaWfCard extends HTMLElement {
     rows.forEach(row => {
       row.style.display = this._showNight ? '' : 'none';
     });
+    this._scheduleGridRowSync();
+  }
+
+  _scheduleGridRowSync() {
+    if (this._gridRowSyncFrame) {
+      cancelAnimationFrame(this._gridRowSyncFrame);
+    }
+
+    this._gridRowSyncFrame = requestAnimationFrame(() => {
+      this._gridRowSyncFrame = 0;
+      const card = this.querySelector('ha-card');
+      if (!card) return;
+
+      const nextRows = Math.max(1, Math.ceil((card.scrollHeight + GRID_GAP_PX) / GRID_STEP_PX));
+      if (nextRows === this._gridRows) return;
+
+      this._gridRows = nextRows;
+
+      this.dispatchEvent(new Event('iron-resize', { bubbles: true, composed: true }));
+      window.dispatchEvent(new Event('resize'));
+    });
   }
 
   _clearDisplay(msg) {
@@ -746,6 +793,7 @@ class HaWfCard extends HTMLElement {
     footer.textContent = '';
     datesRow.innerHTML = '';
     forecastTable.innerHTML = '';
+    this._scheduleGridRowSync();
   }
 }
 
