@@ -28,6 +28,7 @@ Copy the single file `ha_wf_card.js` to the `www` folder of your Home Assistant 
 ## Card Options
 
 - `entity` (**required**): Weather entity containing forecast attributes.
+- `title`: Optional card title.
 - `show_night`: Set to `true` to show night hours.
 - `default_source`: `forecastdata` (default) or `superforecastdata`.
 - `alert`: Alert configuration for highlighting certain wind conditions during non-night hours only. see example below
@@ -35,6 +36,25 @@ Copy the single file `ha_wf_card.js` to the `www` folder of your Home Assistant 
   `UTC` or `Europe/Amsterdam` to display all times in that zone. If omitted, times
   are shown in the end user's local timezone.
 - The card's icon is taken from the entity's `icon` attribute when available.
+
+## Visual Editor
+
+The card now includes a Home Assistant visual editor for all supported options:
+
+- entity selection
+- title
+- default forecast source
+- timezone override
+- default night visibility
+- alert highlighting
+
+The alert editor includes:
+
+- an enable/disable toggle
+- a minimum wind speed field
+- quick presets for common wind sectors
+- a compass preview showing the active alert directions
+- editable direction ranges with wrap-around support
 
 ## Example
 ```yaml

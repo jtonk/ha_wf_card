@@ -752,3 +752,576 @@ class HaWfCard extends HTMLElement {
 if (!customElements.get('ha-wf-card')) {
   customElements.define('ha-wf-card', HaWfCard);
 }
+
+HaWfCard.getConfigElement = () => document.createElement('ha-wf-card-editor');
+HaWfCard.getStubConfig = () => ({
+  entity: '',
+  title: '',
+  show_night: false,
+  default_source: 'forecastdata',
+});
+
+const editorCss = `
+  :host {
+    display: block;
+  }
+  .editor {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+    color: var(--primary-text-color);
+  }
+  .section {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--divider-color);
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--card-background-color) 92%, var(--primary-color) 8%), var(--card-background-color));
+  }
+  .section-header {
+    display: grid;
+    gap: 4px;
+  }
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .section-description {
+    font-size: 13px;
+    color: var(--secondary-text-color);
+  }
+  .field-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+  .field {
+    display: grid;
+    gap: 6px;
+  }
+  .field label,
+  .toggle-row label,
+  .angles-header {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  input,
+  select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--divider-color);
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    font: inherit;
+  }
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--card-background-color) 85%, var(--primary-color) 15%);
+  }
+  .toggle-row input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
+  .alert-layout {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(250px, 300px) minmax(0, 1fr);
+  }
+  .alert-preview-wrap {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+  }
+  .compass-card {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    padding: 16px;
+    border-radius: 18px;
+    background: radial-gradient(circle at center, color-mix(in srgb, var(--card-background-color) 80%, var(--primary-color) 20%) 0 30%, var(--card-background-color) 31% 100%);
+  }
+  .compass {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    border-radius: 50%;
+    border: 1px solid var(--divider-color);
+    background:
+      radial-gradient(circle at center, transparent 0 45px, color-mix(in srgb, var(--divider-color) 50%, transparent) 46px 47px, transparent 48px 100%),
+      var(--alert-preview, conic-gradient(from -90deg, color-mix(in srgb, var(--divider-color) 30%, transparent) 0deg 360deg));
+    box-shadow: inset 0 0 0 18px color-mix(in srgb, var(--card-background-color) 88%, transparent);
+  }
+  .compass::after {
+    content: "";
+    position: absolute;
+    inset: 50%;
+    width: 8px;
+    height: 8px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: var(--primary-text-color);
+  }
+  .compass-marker {
+    position: absolute;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--secondary-text-color);
+  }
+  .compass-marker.n { top: 10px; left: 50%; transform: translateX(-50%); }
+  .compass-marker.e { right: 12px; top: 50%; transform: translateY(-50%); }
+  .compass-marker.s { bottom: 10px; left: 50%; transform: translateX(-50%); }
+  .compass-marker.w { left: 12px; top: 50%; transform: translateY(-50%); }
+  .alert-summary {
+    font-size: 13px;
+    color: var(--secondary-text-color);
+    text-align: center;
+  }
+  .angles-panel {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+  .preset-row,
+  .angles-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  button {
+    font: inherit;
+    border: 1px solid var(--divider-color);
+    border-radius: 999px;
+    background: var(--card-background-color);
+    color: var(--primary-text-color);
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--primary-color);
+    color: var(--text-primary-color, #fff);
+    border-color: var(--primary-color);
+  }
+  button.danger {
+    color: var(--error-color);
+  }
+  .angle-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--card-background-color) 80%, var(--primary-color) 20%);
+    font-size: 13px;
+  }
+  .range-list {
+    display: grid;
+    gap: 10px;
+  }
+  .range-row {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    align-items: end;
+    padding: 12px;
+    border: 1px solid var(--divider-color);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--card-background-color) 92%, var(--primary-color) 8%);
+  }
+  .field-hint {
+    font-size: 12px;
+    color: var(--secondary-text-color);
+  }
+  .empty-state {
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px dashed var(--divider-color);
+    color: var(--secondary-text-color);
+  }
+  @media (max-width: 800px) {
+    .alert-layout {
+      grid-template-columns: 1fr;
+    }
+    .compass {
+      width: 180px;
+      height: 180px;
+    }
+  }
+`;
+
+class HaWfCardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = {
+      show_night: false,
+      default_source: 'forecastdata',
+      ...config,
+    };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (this.isConnected) this._render();
+  }
+
+  connectedCallback() {
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: 'open' });
+    }
+    this._render();
+  }
+
+  _render() {
+    if (!this.shadowRoot || !this._config) return;
+
+    const alert = this._normalizeAlert(this._config.alert);
+    const alertEnabled = !!alert;
+    const ranges = alert?.angles ?? [];
+    const entityPicker = this._hass
+      ? `<ha-entity-picker
+          data-field="entity"
+          allow-custom-entity
+        ></ha-entity-picker>`
+      : `<input data-field="entity" type="text" value="${this._escape(this._config.entity ?? '')}" placeholder="sensor.windfinder_noordwijk">`;
+
+    this.shadowRoot.innerHTML = `
+      <style>${editorCss}</style>
+      <div class="editor">
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">Card Setup</div>
+            <div class="section-description">Select the Windfinder entity and the default display behavior.</div>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label>Entity</label>
+              ${entityPicker}
+            </div>
+            <div class="field">
+              <label for="title">Title</label>
+              <input id="title" data-field="title" type="text" value="${this._escape(this._config.title ?? '')}" placeholder="Kite Forecast">
+            </div>
+            <div class="field">
+              <label for="default_source">Default source</label>
+              <select id="default_source" data-field="default_source">
+                <option value="forecastdata" ${this._config.default_source !== 'superforecastdata' ? 'selected' : ''}>Forecast</option>
+                <option value="superforecastdata" ${this._config.default_source === 'superforecastdata' ? 'selected' : ''}>Superforecast</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="timezone">Timezone</label>
+              <input id="timezone" data-field="timezone" type="text" value="${this._escape(this._config.timezone ?? '')}" placeholder="Europe/Amsterdam">
+              <div class="field-hint">Leave empty to use the viewer's local timezone.</div>
+            </div>
+          </div>
+          <div class="toggle-row">
+            <label for="show_night">Show night hours by default</label>
+            <input id="show_night" data-field="show_night" type="checkbox" ${this._config.show_night ? 'checked' : ''}>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-header">
+            <div class="section-title">Alert Highlighting</div>
+            <div class="section-description">Highlight forecast periods when wind speed and direction match your preferred sailing window. Alerts only apply to non-night hours in the card.</div>
+          </div>
+          <div class="toggle-row">
+            <label for="alert_enabled">Enable alert highlighting</label>
+            <input id="alert_enabled" type="checkbox" ${alertEnabled ? 'checked' : ''}>
+          </div>
+          ${alertEnabled ? this._renderAlertSection(alert) : ''}
+        </section>
+      </div>
+    `;
+
+    if (this._hass) {
+      const picker = this.shadowRoot.querySelector('ha-entity-picker');
+      if (picker) {
+        picker.hass = this._hass;
+        picker.value = this._config.entity ?? '';
+        picker.configValue = 'entity';
+      }
+    }
+
+    this._bindEvents();
+  }
+
+  _renderAlertSection(alert) {
+    const ranges = alert.angles ?? [];
+    return `
+      <div class="alert-layout">
+        <div class="alert-preview-wrap">
+          <div class="compass-card">
+            <div class="compass" style="--alert-preview:${this._buildAlertGradient(ranges)};">
+              <span class="compass-marker n">N</span>
+              <span class="compass-marker e">E</span>
+              <span class="compass-marker s">S</span>
+              <span class="compass-marker w">W</span>
+            </div>
+            <div class="alert-summary">${this._describeAlert(ranges, alert.speed_min)}</div>
+          </div>
+          <div class="field">
+            <label for="alert_speed_min">Minimum wind speed (kn)</label>
+            <input id="alert_speed_min" data-alert-field="speed_min" type="number" min="0" step="1" value="${Number.isFinite(alert.speed_min) ? alert.speed_min : ''}" placeholder="15">
+            <div class="field-hint">Only rows at or above this wind speed are highlighted.</div>
+          </div>
+        </div>
+        <div class="angles-panel">
+          <div class="angles-header">Direction ranges</div>
+          <div class="field-hint">Use degrees where 0/360 is north, 90 east, 180 south, and 270 west. Wrap-around ranges such as 300 to 40 are supported.</div>
+          <div class="preset-row">
+            <button type="button" data-preset="north">North</button>
+            <button type="button" data-preset="east">East</button>
+            <button type="button" data-preset="south">South</button>
+            <button type="button" data-preset="west">West</button>
+            <button type="button" data-preset="cross">Cross-shore pair</button>
+            <button type="button" data-preset="clear">Clear</button>
+          </div>
+          ${ranges.length ? `
+            <div class="angles-list">${ranges.map((range, index) => `
+              <span class="angle-chip">
+                ${this._formatRange(range)}
+                <button type="button" class="danger" data-remove-range="${index}">Remove</button>
+              </span>
+            `).join('')}</div>
+          ` : `<div class="empty-state">No direction ranges configured yet.</div>`}
+          <div class="range-list">
+            ${ranges.map((range, index) => `
+              <div class="range-row">
+                <div class="field">
+                  <label for="range_from_${index}">From</label>
+                  <input id="range_from_${index}" data-range-index="${index}" data-range-field="from" type="number" min="0" max="360" step="1" value="${this._escape(range.from ?? '')}">
+                </div>
+                <div class="field">
+                  <label for="range_to_${index}">To</label>
+                  <input id="range_to_${index}" data-range-index="${index}" data-range-field="to" type="number" min="0" max="360" step="1" value="${this._escape(range.to ?? '')}">
+                </div>
+                <button type="button" class="danger" data-remove-range="${index}">Delete</button>
+              </div>
+            `).join('')}
+          </div>
+          <button type="button" class="primary" id="add-range">Add direction range</button>
+        </div>
+      </div>
+    `;
+  }
+
+  _bindEvents() {
+    this.shadowRoot.querySelectorAll('[data-field]').forEach((el) => {
+      const eventName = el.tagName === 'HA-ENTITY-PICKER'
+        ? 'value-changed'
+        : (el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input');
+      el.addEventListener(eventName, (ev) => {
+        const value = el.type === 'checkbox' ? el.checked : (ev.detail?.value ?? el.value);
+        this._updateConfigValue(el.dataset.field, value);
+      });
+    });
+
+    const alertToggle = this.shadowRoot.querySelector('#alert_enabled');
+    if (alertToggle) {
+      alertToggle.addEventListener('change', () => {
+        this._updateConfig({
+          alert: alertToggle.checked ? { speed_min: 15, angles: [] } : undefined,
+        });
+      });
+    }
+
+    const speedInput = this.shadowRoot.querySelector('[data-alert-field="speed_min"]');
+    if (speedInput) {
+      speedInput.addEventListener('input', () => {
+        const nextAlert = this._normalizeAlert(this._config.alert) ?? { angles: [] };
+        const value = speedInput.value === '' ? undefined : Number(speedInput.value);
+        nextAlert.speed_min = Number.isFinite(value) ? value : undefined;
+        this._updateConfig({ alert: this._compactAlert(nextAlert) });
+      });
+    }
+
+    this.shadowRoot.querySelectorAll('[data-range-field]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const index = Number(input.dataset.rangeIndex);
+        const field = input.dataset.rangeField;
+        const nextAlert = this._normalizeAlert(this._config.alert) ?? { angles: [] };
+        const nextAngles = [...(nextAlert.angles ?? [])];
+        const nextRange = { ...(nextAngles[index] ?? {}) };
+        nextRange[field] = input.value === '' ? undefined : Number(input.value);
+        nextAngles[index] = nextRange;
+        nextAlert.angles = nextAngles;
+        this._updateConfig({ alert: this._compactAlert(nextAlert) });
+      });
+    });
+
+    this.shadowRoot.querySelectorAll('[data-remove-range]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const index = Number(button.dataset.removeRange);
+        const nextAlert = this._normalizeAlert(this._config.alert) ?? { angles: [] };
+        nextAlert.angles = (nextAlert.angles ?? []).filter((_, i) => i !== index);
+        this._updateConfig({ alert: this._compactAlert(nextAlert) });
+      });
+    });
+
+    const addButton = this.shadowRoot.querySelector('#add-range');
+    if (addButton) {
+      addButton.addEventListener('click', () => {
+        const nextAlert = this._normalizeAlert(this._config.alert) ?? { speed_min: 15, angles: [] };
+        nextAlert.angles = [...(nextAlert.angles ?? []), { from: 0, to: 30 }];
+        this._updateConfig({ alert: this._compactAlert(nextAlert) });
+      });
+    }
+
+    this.shadowRoot.querySelectorAll('[data-preset]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this._applyPreset(button.dataset.preset);
+      });
+    });
+  }
+
+  _applyPreset(preset) {
+    if (preset === 'clear') {
+      this._updateConfig({ alert: { ...this._normalizeAlert(this._config.alert), angles: [] } });
+      return;
+    }
+
+    const presets = {
+      north: [{ from: 315, to: 45 }],
+      east: [{ from: 45, to: 135 }],
+      south: [{ from: 135, to: 225 }],
+      west: [{ from: 225, to: 315 }],
+      cross: [{ from: 45, to: 135 }, { from: 225, to: 315 }],
+    };
+
+    const nextAlert = this._normalizeAlert(this._config.alert) ?? { speed_min: 15, angles: [] };
+    nextAlert.angles = presets[preset] ?? nextAlert.angles ?? [];
+    this._updateConfig({ alert: this._compactAlert(nextAlert) });
+  }
+
+  _updateConfigValue(key, value) {
+    const next = {};
+    if (key === 'title' || key === 'timezone') {
+      next[key] = value || undefined;
+    } else {
+      next[key] = value;
+    }
+    this._updateConfig(next);
+  }
+
+  _updateConfig(changes) {
+    this._config = {
+      ...this._config,
+      ...changes,
+    };
+
+    if (!this._config.alert) {
+      delete this._config.alert;
+    }
+
+    this.dispatchEvent(new CustomEvent('config-changed', {
+      detail: { config: this._config },
+      bubbles: true,
+      composed: true,
+    }));
+
+    this._render();
+  }
+
+  _normalizeAlert(alert) {
+    if (!alert) return null;
+    return {
+      speed_min: Number.isFinite(alert.speed_min) ? Number(alert.speed_min) : undefined,
+      angles: Array.isArray(alert.angles)
+        ? alert.angles.map((range) => ({
+          from: Number.isFinite(range?.from) ? Number(range.from) : undefined,
+          to: Number.isFinite(range?.to) ? Number(range.to) : undefined,
+        }))
+        : [],
+    };
+  }
+
+  _compactAlert(alert) {
+    if (!alert) return undefined;
+    const angles = (alert.angles ?? []).filter((range) => range.from != null && range.to != null);
+    return {
+      ...(Number.isFinite(alert.speed_min) ? { speed_min: alert.speed_min } : {}),
+      angles,
+    };
+  }
+
+  _buildAlertGradient(ranges) {
+    if (!ranges?.length) {
+      return 'conic-gradient(from -90deg, color-mix(in srgb, var(--divider-color) 25%, transparent) 0deg 360deg)';
+    }
+
+    const normalized = [];
+    ranges.forEach((range) => {
+      if (range.from == null || range.to == null) return;
+      const from = this._normalizeDeg(range.from);
+      const to = this._normalizeDeg(range.to);
+      if (from <= to) {
+        normalized.push([from, to]);
+      } else {
+        normalized.push([from, 360], [0, to]);
+      }
+    });
+
+    normalized.sort((a, b) => a[0] - b[0]);
+
+    const segments = [];
+    let cursor = 0;
+    normalized.forEach(([start, end]) => {
+      if (start > cursor) {
+        segments.push(`color-mix(in srgb, var(--divider-color) 20%, transparent) ${cursor}deg ${start}deg`);
+      }
+      segments.push(`color-mix(in srgb, var(--error-color) 75%, orange) ${start}deg ${end}deg`);
+      cursor = Math.max(cursor, end);
+    });
+    if (cursor < 360) {
+      segments.push(`color-mix(in srgb, var(--divider-color) 20%, transparent) ${cursor}deg 360deg`);
+    }
+
+    return `conic-gradient(from -90deg, ${segments.join(', ')})`;
+  }
+
+  _describeAlert(ranges, speedMin) {
+    const speedText = Number.isFinite(speedMin) ? `${speedMin}+ kn` : 'any wind speed';
+    if (!ranges?.length) {
+      return `Alerting enabled for ${speedText}, but no wind direction ranges are selected yet.`;
+    }
+    return `${speedText} from ${ranges.map((range) => this._formatRange(range)).join(', ')}.`;
+  }
+
+  _formatRange(range) {
+    return `${this._normalizeDeg(range.from)}° to ${this._normalizeDeg(range.to)}°`;
+  }
+
+  _normalizeDeg(value) {
+    return ((Number(value) % 360) + 360) % 360;
+  }
+
+  _escape(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
+  }
+}
+
+if (!customElements.get('ha-wf-card-editor')) {
+  customElements.define('ha-wf-card-editor', HaWfCardEditor);
+}
+
+window.customCards = window.customCards || [];
+if (!window.customCards.find((card) => card.type === 'ha-wf-card')) {
+  window.customCards.push({
+    type: 'ha-wf-card',
+    name: 'Windfinder Card',
+    description: 'Windfinder forecast card with visual alert configuration.',
+  });
+}
