@@ -1154,7 +1154,14 @@ class HaWfCardEditor extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (this._config?.default_source === 'superforecastdata' && !this._canSelectSuperforecast()) {
+      this._updateConfig({ default_source: 'forecastdata' }, { render: true });
+      return;
+    }
     this._setupEntityForm();
+    if (this.shadowRoot) {
+      this._render();
+    }
   }
 
   connectedCallback() {
@@ -1169,6 +1176,7 @@ class HaWfCardEditor extends HTMLElement {
 
     const alert = this._normalizeAlert(this._config.alert);
     const alertEnabled = !!alert;
+    const canSelectSuperforecast = this._canSelectSuperforecast();
 
     this.shadowRoot.innerHTML = `
       <style>${editorCss}</style>
@@ -1187,12 +1195,14 @@ class HaWfCardEditor extends HTMLElement {
               <label for="title">Title</label>
               <ha-textfield id="title" data-field="title" value="${this._escape(this._config.title ?? '')}" placeholder="Kite Forecast"></ha-textfield>
             </div>
-            <div class="field switch-field">
-              <ha-formfield label="Superforecast by default">
-                <ha-switch id="default_source_switch" data-field="default_source_switch" ${this._config.default_source === 'superforecastdata' ? 'checked' : ''}></ha-switch>
-              </ha-formfield>
-              <div class="field-hint">Turn this off to start on the regular forecast.</div>
-            </div>
+            ${canSelectSuperforecast ? `
+              <div class="field switch-field">
+                <ha-formfield label="Superforecast by default">
+                  <ha-switch id="default_source_switch" data-field="default_source_switch" ${this._config.default_source === 'superforecastdata' ? 'checked' : ''}></ha-switch>
+                </ha-formfield>
+                <div class="field-hint">Turn this off to start on the regular forecast.</div>
+              </div>
+            ` : ''}
             <div class="field switch-field">
               <ha-formfield label="Show night hours by default">
                 <ha-switch id="show_night" data-field="show_night" ${this._config.show_night ? 'checked' : ''}></ha-switch>
@@ -1365,14 +1375,21 @@ class HaWfCardEditor extends HTMLElement {
 
   _updateConfigValue(key, value) {
     const next = {};
+    let render = false;
     if (key === 'title') {
       next[key] = value || undefined;
+    } else if (key === 'entity') {
+      next.entity = value;
+      render = true;
+      if (this._config.default_source === 'superforecastdata' && !this._canSelectSuperforecast(value)) {
+        next.default_source = 'forecastdata';
+      }
     } else if (key === 'default_source_switch') {
       next.default_source = value ? 'superforecastdata' : 'forecastdata';
     } else {
       next[key] = value;
     }
-    this._updateConfig(next);
+    this._updateConfig(next, { render });
   }
 
   _updateConfig(changes, options = {}) {
@@ -1397,6 +1414,11 @@ class HaWfCardEditor extends HTMLElement {
     if (options.render) {
       this._render();
     }
+  }
+
+  _canSelectSuperforecast(entityId = this._config?.entity) {
+    const attributes = this._hass?.states?.[entityId]?.attributes;
+    return Array.isArray(attributes?.forecastdata) && Array.isArray(attributes?.superforecastdata);
   }
 
   _normalizeAlert(alert) {
