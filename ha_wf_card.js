@@ -5,17 +5,17 @@ const css = `
 
 }
 .title-block {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0px;
+  column-gap: 8px;
+  row-gap: 6px;
   padding: 12px 16px 12px 16px;
 }
 .icon-title-block {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
   min-width: 32px;
   min-height: 32px;
 }
@@ -30,7 +30,6 @@ const css = `
   display: flex;
   flex-direction: column;
   justify-content: center;
-  flex: 1 1 160px;
   min-width: 0;
 }
 .card-title {
@@ -58,16 +57,14 @@ const css = `
   display: flex;
   gap: 10px;
   align-items: center;
-  margin-left: auto;
-  flex: 0 0 auto;
   flex-wrap: wrap;
+  justify-content: flex-end;
   min-width: max-content;
 }
 .control-group {
   display: flex;
   gap: 4px;
   align-items: center;
-  flex: 0 0 auto;
 }
 .control-group[hidden] {
   display: none;
@@ -315,15 +312,10 @@ ha-icon.rotated {
 }
 
 @media (max-width: 720px) {
-  .title-block {
-    gap: 8px;
-  }
-
   .controls {
-    flex: 1 0 100%;
+    grid-column: 1 / -1;
     min-width: 0;
-    margin-left: 0;
-    justify-content: flex-end;
+    width: 100%;
     padding-top: 4px;
   }
 }
@@ -339,6 +331,9 @@ const GRID_STEP_PX = GRID_ROW_PX + GRID_GAP_PX;
 const DEFAULT_TITLE = 'Kite Forecast';
 const FORECAST_INTERVAL_MS = 3 * 60 * 60 * 1000;
 const SUPERFORECAST_INTERVAL_MS = 60 * 60 * 1000;
+const TIME_ZONE_ALIASES = {
+  'America/Kralendijk': 'America/Curacao',
+};
 const WIND_SCALE_COLORS = [
   "#9700ff", "#6400ff", "#3200ff", "#0032ff", "#0064ff", "#0096ff", "#00c7ff",
   "#00e6f0", "#25c192", "#11d411", "#00e600", "#00fa00", "#b8ff61", "#fffe00",
@@ -811,12 +806,17 @@ class HaWfCard extends HTMLElement {
     if (!timeZone) return undefined;
     const normalized = timeZone.toLowerCase() === 'utc' ? 'UTC' : timeZone;
 
-    try {
-      Intl.DateTimeFormat('en-US', { timeZone: normalized });
-      return normalized;
-    } catch (_error) {
-      return undefined;
+    const candidates = [normalized, TIME_ZONE_ALIASES[normalized]].filter(Boolean);
+    for (const candidate of candidates) {
+      try {
+        Intl.DateTimeFormat('en-US', { timeZone: candidate });
+        return candidate;
+      } catch (_error) {
+        continue;
+      }
     }
+
+    return undefined;
   }
 
   _formatDataDayLabel(date) {
