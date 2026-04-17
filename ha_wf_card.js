@@ -31,6 +31,7 @@ const css = `
   flex-direction: column;
   justify-content: center;
   min-width: 0;
+  overflow: hidden;
 }
 .card-title {
   font-size: 14px;
@@ -55,16 +56,19 @@ const css = `
 }
 .controls {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  min-width: max-content;
+  min-width: 0;
+  justify-self: end;
+  overflow: hidden;
 }
 .control-group {
   display: flex;
   gap: 4px;
   align-items: center;
+  min-width: 0;
 }
 .control-group[hidden] {
   display: none;
@@ -309,18 +313,42 @@ ha-icon.rotated {
   font-size: 0.8rem;
   margin-left: 6px;
   user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (max-width: 720px) {
+  .title-block {
+    column-gap: 6px;
+    padding: 10px 12px;
+  }
+  .icon-title-block {
+    min-width: 28px;
+    min-height: 28px;
+  }
+  .icon-title-block ha-icon {
+    margin-right: 4px;
+    width: 28px;
+    height: 28px;
+  }
   .controls {
-    grid-column: 1 / -1;
-    min-width: 0;
-    width: 100%;
-    padding-top: 4px;
+    gap: 6px;
+  }
+  .control-group {
+    gap: 2px;
+  }
+  .card-title {
+    font-size: 13px;
+  }
+  .subtitle {
+    font-size: 11px;
+  }
+  .toggle-label {
+    margin-left: 4px;
+    max-width: 3.8em;
   }
 }
-
-
 
 `;
 const FIXED_GRID_COLUMNS = 12;
