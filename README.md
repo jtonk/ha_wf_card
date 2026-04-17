@@ -27,7 +27,7 @@ Copy the single file `ha_wf_card.js` to the `www` folder of your Home Assistant 
 
 ## Card Options
 
-- `entity` (**required**): Weather entity containing forecast attributes.
+- `entity` (**required**): Windfinder entity containing the forecast attributes exposed by `ha_wf`.
 - `title`: Optional card title.
 - `show_night`: Set to `true` to show night hours.
 - `default_source`: `forecastdata` (default) or `superforecastdata`.

@@ -53,9 +53,18 @@ const css = `
 }
 .controls {
   display: flex;
-  gap: 4px;
+  gap: 10px;
   align-items: center;
   margin-left: auto;
+  flex-wrap: wrap;
+}
+.control-group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.control-group[hidden] {
+  display: none;
 }
 .toggle-switch {
   position: relative;
@@ -302,6 +311,14 @@ const DEFAULT_GRID_ROWS = 8;
 const GRID_ROW_PX = 56;
 const GRID_GAP_PX = 8;
 const GRID_STEP_PX = GRID_ROW_PX + GRID_GAP_PX;
+const DEFAULT_TITLE = 'Kite Forecast';
+const FORECAST_INTERVAL_MS = 3 * 60 * 60 * 1000;
+const WIND_SCALE_COLORS = [
+  "#9700ff", "#6400ff", "#3200ff", "#0032ff", "#0064ff", "#0096ff", "#00c7ff",
+  "#00e6f0", "#25c192", "#11d411", "#00e600", "#00fa00", "#b8ff61", "#fffe00",
+  "#ffe100", "#ffc800", "#ffaf00", "#ff9600", "#e67d00", "#e66400", "#dc4a1d",
+  "#c8321d", "#b4191d", "#aa001d", "#b40032", "#c80064", "#fe0096"
+];
 
 class HaWfCard extends HTMLElement {
   setConfig(config) {
@@ -318,7 +335,7 @@ class HaWfCard extends HTMLElement {
       this._timeZone = undefined;
     }
     this._selectedSource = null;
-    this._lastState = null;
+    this._lastStateObj = null;
     this._activeDay = null;
     this._gridRows = DEFAULT_GRID_ROWS;
     this._gridRowSyncFrame = 0;
@@ -332,20 +349,24 @@ class HaWfCard extends HTMLElement {
               <ha-icon id="refresh-icon" style="cursor:pointer" title="Refresh"></ha-icon>
             </div>
             <div class="text-title-block">
-              <div class="card-title">${this.config.title || 'Kite Forecast'}</div>
+              <div class="card-title">${this._escapeHtml(this.config.title || DEFAULT_TITLE)}</div>
               <div class="subtitle" id="subtitle"></div>
             </div>
             <div class="controls" id="controls-container">
-              <span class="toggle-label">Night</span>
-              <label class="toggle-switch" title="Toggle night hours">
-                <input type="checkbox" id="toggle-night" ${this._showNight ? 'checked' : ''}>
-                <span class="slider"></span>
-              </label>
-              <span class="toggle-label">Super Forecast</span>
-              <label class="toggle-switch" title="Toggle forecast source (off=Forecast, on=Superforecast)">
-                <input type="checkbox" id="toggle-source" ${this._defaultSource === 'superforecastdata' ? 'checked' : ''}>
-                <span class="slider"></span>
-              </label>
+              <div class="control-group">
+                <span class="toggle-label">Night</span>
+                <label class="toggle-switch" title="Toggle night hours">
+                  <input type="checkbox" id="toggle-night" ${this._showNight ? 'checked' : ''}>
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="control-group" id="source-control">
+                <span class="toggle-label">Superforecast</span>
+                <label class="toggle-switch" title="Toggle forecast source (off=Forecast, on=Superforecast)">
+                  <input type="checkbox" id="toggle-source" ${this._defaultSource === 'superforecastdata' ? 'checked' : ''}>
+                  <span class="slider"></span>
+                </label>
+              </div>
             </div>
           </div>
         <div class="scroll-container">
@@ -404,7 +425,11 @@ class HaWfCard extends HTMLElement {
     this._hass = hass;
     const entity = this.config.entity;
     const stateObj = this._hass.states[entity];
-    if (!stateObj) return;
+    if (!stateObj) {
+      this._lastStateObj = null;
+      this._clearDisplay("Entity not found");
+      return;
+    }
 
     const refreshIcon = this.querySelector('#refresh-icon');
     if (refreshIcon) {
@@ -412,8 +437,8 @@ class HaWfCard extends HTMLElement {
       refreshIcon.setAttribute('icon', icon);
     }
 
-    if (stateObj.state === this._lastState) return;
-    this._lastState = stateObj.state;
+    if (stateObj === this._lastStateObj) return;
+    this._lastStateObj = stateObj;
     this._updateFromSelectedSource();
   }
 
@@ -422,12 +447,14 @@ class HaWfCard extends HTMLElement {
     if (!alert || !Array.isArray(alert.angles)) return false;
     if (isNightHour) return false;
 
-    const minSpeed = alert.speed_min ?? Infinity;
-    if (typeof speed !== 'number' || speed < minSpeed || typeof angleDeg !== 'number') return false;
+    const minSpeed = this._toFiniteNumber(alert.speed_min) ?? Infinity;
+    const speedValue = this._toFiniteNumber(speed);
+    const angleValue = this._toFiniteNumber(angleDeg);
+    if (speedValue == null || speedValue < minSpeed || angleValue == null) return false;
 
     const norm = v => ((v % 360) + 360) % 360;  // Normalize to 0–359
 
-    const angle = norm(angleDeg);
+    const angle = norm(angleValue);
 
     return alert.angles.some(({ from, to }) => {
       const start = norm(from);
@@ -450,15 +477,21 @@ class HaWfCard extends HTMLElement {
     const stateObj = this._hass.states[entity];
     if (!stateObj) return;
 
-    //const sourceSelector = this.querySelector("#source-select");
-    const controlsContainer = this.querySelector("#controls-container");
+    const sourceControl = this.querySelector("#source-control");
+    const sourceToggle = this.querySelector("#toggle-source");
     const hasSuper = Array.isArray(stateObj.attributes.superforecastdata);
     const hasForecast = Array.isArray(stateObj.attributes.forecastdata);
+    const canToggleSource = hasForecast && hasSuper;
 
-    controlsContainer.style.display = hasSuper ? 'flex' : 'none';
+    if (sourceControl) {
+      sourceControl.hidden = !canToggleSource;
+    }
+    if (sourceToggle) {
+      sourceToggle.disabled = !canToggleSource;
+    }
 
     let source = this._selectedSource;
-    if (!source) {
+    if (!source || !Array.isArray(stateObj.attributes[source])) {
       if (this.config.default_source && Array.isArray(stateObj.attributes[this.config.default_source])) {
         source = this.config.default_source;
       } else if (hasForecast) {
@@ -471,12 +504,18 @@ class HaWfCard extends HTMLElement {
       }
     }
 
-    //sourceSelector.value = source;
     this._selectedSource = source;
+    if (sourceToggle) {
+      sourceToggle.checked = source === 'superforecastdata';
+    }
 
     const data = stateObj.attributes[source];
     if (!Array.isArray(data)) {
       this._clearDisplay("Forecast data is not an array");
+      return;
+    }
+    if (data.length === 0) {
+      this._clearDisplay("Forecast data is empty");
       return;
     }
 
@@ -484,25 +523,17 @@ class HaWfCard extends HTMLElement {
     const footer = this.querySelector("#footer");
     const datesRow = this.querySelector("#dates-row");
     const forecastTable = this.querySelector("#forecast-table");
-    const tzOpt = this._timeZone ? { timeZone: this._timeZone } : {};
+    const tzOpt = this._getLocaleTimeZoneOptions();
     const spot_name = stateObj.attributes.spot_name;
     const prefix = source === 'superforecastdata' ? 'superforecast' : 'forecast';
     const generated_at = stateObj.attributes[prefix + '_generated'];
 
-    // Parse generation date - use local timezone unless timezone config is set
     let generatedDate = new Date(generated_at);
     if (isNaN(generatedDate.getTime())) generatedDate = new Date();
     const now = new Date();
-    const nowTz = this._timeZone ? new Date(now.toLocaleString('en-US', { timeZone: this._timeZone })) : now;
     const ageHours = (now - generatedDate) / 36e5;
 
     subtitle.textContent = `${spot_name || 'Unknown location'}`;
-
-    // footer.textContent = `Updated ${generatedDate.toLocaleDateString('en-GB', {
-    //   weekday: 'short', day: 'numeric', month: 'short'
-    // })} ${generatedDate.toLocaleTimeString('en-GB', {
-    //   hour: '2-digit', minute: '2-digit', hour12: false
-    // })}`;
 
     const generatedStr = generatedDate.toLocaleDateString('en-GB', {
       weekday: 'short', day: 'numeric', month: 'short', ...tzOpt
@@ -511,74 +542,63 @@ class HaWfCard extends HTMLElement {
     });
 
     footer.textContent = `Generated ${generatedStr}`;
-
-
     footer.classList.toggle('warning', ageHours > 6);
 
-    // Color map for wind speeds and temperature
-    const wsColors = [
-      "#9700ff", "#6400ff", "#3200ff", "#0032ff", "#0064ff", "#0096ff", "#00c7ff",
-      "#00e6f0", "#25c192", "#11d411", "#00e600", "#00fa00", "#b8ff61", "#fffe00",
-      "#ffe100", "#ffc800", "#ffaf00", "#ff9600", "#e67d00", "#e66400", "#dc4a1d",
-      "#c8321d", "#b4191d", "#aa001d", "#b40032", "#c80064", "#fe0096"
-    ];
-
     const getColorForWind = (speed) => {
-      if (speed == null || isNaN(speed)) return 'inherit';
-      const index = Math.min(wsColors.length - 1, Math.floor(speed / 2));
-      return wsColors[index];
+      const value = this._toFiniteNumber(speed);
+      if (value == null) return 'inherit';
+      const index = Math.max(0, Math.min(WIND_SCALE_COLORS.length - 1, Math.floor(value / 2)));
+      return WIND_SCALE_COLORS[index];
     };
 
     const getColorForTemperature = (temp) => {
-      if (temp == null || isNaN(temp)) return 'inherit';
-      const index = Math.floor((temp + 13) / 2); // since ws0 is for ≤ -13
-      return wsColors[Math.max(0, Math.min(wsColors.length - 1, index))];
+      const value = this._toFiniteNumber(temp);
+      if (value == null) return 'inherit';
+      const index = Math.floor((value + 13) / 2);
+      return WIND_SCALE_COLORS[Math.max(0, Math.min(WIND_SCALE_COLORS.length - 1, index))];
     };
-
 
     const groupedByDay = {};
     data.forEach(row => {
       const dt = new Date(row.datetime);
       if (isNaN(dt.getTime())) return;
 
-      // Use en-CA for ISO-like yyyy-mm-dd grouping keys
-      const dayKey = dt.toLocaleDateString('en-CA', tzOpt);
+      const dayKey = this._getDayKey(dt);
 
       if (!groupedByDay[dayKey]) groupedByDay[dayKey] = [];
       groupedByDay[dayKey].push(row);
     });
 
-    if (!this._activeDay || !groupedByDay[this._activeDay]) {
-      const todayKey = new Date().toLocaleDateString('en-CA', tzOpt);
-      this._activeDay = groupedByDay[todayKey] ? todayKey : Object.keys(groupedByDay)[0];
+    const dayEntries = Object.entries(groupedByDay);
+    if (!dayEntries.length) {
+      this._clearDisplay("Forecast data contains no valid rows");
+      return;
     }
 
-    datesRow.innerHTML = Object.keys(groupedByDay).map(day => {
+    if (!this._activeDay || !groupedByDay[this._activeDay]) {
+      const todayKey = this._getDayKey(now);
+      this._activeDay = groupedByDay[todayKey] ? todayKey : dayEntries[0][0];
+    }
+
+    datesRow.innerHTML = dayEntries.map(([day, rows]) => {
       const activeClass = day === this._activeDay ? 'active' : '';
+      const displayDay = this._formatDayLabel(new Date(rows[0].datetime));
 
-      // For display, you can still use 'nl-NL' or 'en-GB' or whatever you prefer
-      const displayDay = new Date(day).toLocaleDateString('en-GB', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        ...tzOpt
-      });
-
-      // Wind bar for this day
-      const windBars = groupedByDay[day].map(row => {
+      const windBars = rows.map(row => {
+        const windSpeed = this._toFiniteNumber(row.wind_speed_kn);
+        const gustSpeed = this._toFiniteNumber(row.wind_gust_kn);
         const colorWind = getColorForWind(row.wind_speed_kn);
         const colorGust = getColorForWind(row.wind_gust_kn);
-        const gustDif = row.wind_gust_kn - row.wind_speed_kn;
+        const gustDif = Math.max(0, (gustSpeed ?? 0) - (windSpeed ?? 0));
         const gustHeight = gustDif >= 1 ? 1 : 0;
-        const gustMargin = gustDif >= 1 ? gustDif: 0;
+        const gustMargin = gustDif >= 1 ? gustDif : 0;
         const windBarAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg, row.night_hour);
         const windBarClass = `${windBarAlert ? 'alert' : ''}`;
         return `<div class="wind-bar-segment ${windBarClass}">
-            <div class="date-wind-bar-segment" style="background:${colorWind};height:${row.wind_speed_kn}px;width:100%;display:inline-block;"></div>
+            <div class="date-wind-bar-segment" style="background:${colorWind};height:${Math.max(0, windSpeed ?? 0)}px;width:100%;display:inline-block;"></div>
             <div class="date-gust-bar-segment" style="background:${colorGust};height: ${gustHeight}px;margin-bottom:${gustMargin}px;width:100%;display:inline-block;"></div>
           </div>`;
       }).join('');
-
 
       return `
         <div class="date-tab ${activeClass}" data-day="${day}">
@@ -614,51 +634,49 @@ class HaWfCard extends HTMLElement {
       <div class="forecast-body"></div>
     `;
 
-    const nowDayKey = nowTz.toLocaleDateString('en-CA', tzOpt);
-    const nowHour = nowTz.getHours();
+    const nowDayKey = this._getDayKey(now);
+    const nowHour = this._getHour(now);
+    const nowMs = now.getTime();
 
-    // Render forecast body rows for active day (always render night rows)
     const body = forecastTable.querySelector(".forecast-body");
     const rowsHtml = groupedByDay[this._activeDay].map(row => {
       const nightClass = row.night_hour ? 'night' : '';
-
-      // Rotate mdi:navigation icon by (deg + 180) % 360
       const rotateDir = deg => ((deg + 180) % 360);
+      const windSpeed = this._toFiniteNumber(row.wind_speed_kn);
+      const gustSpeed = this._toFiniteNumber(row.wind_gust_kn);
+      const windDirection = this._toFiniteNumber(row.wind_direction_deg);
+      const temperature = this._toFiniteNumber(row.temperature_c);
+      const cloudCover = this._toFiniteNumber(row.cloud_cover_pct);
+      const rainAmount = this._toFiniteNumber(row.rain_mm);
+      const pressure = this._toFiniteNumber(row.air_pressure_hpa);
+      const waveDirection = this._toFiniteNumber(row.wave_direction_deg);
+      const waveHeight = this._toFiniteNumber(row.wave_height_m);
+      const waveInterval = this._toFiniteNumber(row.wave_interval_s);
 
-      const windDirIcon = (row.wind_direction_deg != null)
-        ? `<ha-icon icon="mdi:navigation" class="rotated" style="transform: rotate(${rotateDir(row.wind_direction_deg)}deg); --mdc-icon-size: 16px;"></ha-icon>`
+      const windDirIcon = (windDirection != null)
+        ? `<ha-icon icon="mdi:navigation" class="rotated" style="transform: rotate(${rotateDir(windDirection)}deg); --mdc-icon-size: 16px;"></ha-icon>`
         : '';
 
-      const waveDirIcon = (row.wave_direction_deg != null)
-        ? `<ha-icon icon="mdi:navigation" class="rotated" style="transform: rotate(${rotateDir(row.wave_direction_deg)}deg); --mdc-icon-size: 16px;" ></ha-icon>`
+      const waveDirIcon = (waveDirection != null)
+        ? `<ha-icon icon="mdi:navigation" class="rotated" style="transform: rotate(${rotateDir(waveDirection)}deg); --mdc-icon-size: 16px;" ></ha-icon>`
         : '';
 
-      // Format time locally
       const dt = new Date(row.datetime);
-      const dtTz = this._timeZone ? new Date(dt.toLocaleString('en-US', { timeZone: this._timeZone })) : dt;
       const isAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg, row.night_hour);
-      const timeStr = dt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, ...tzOpt });
+      const timeStr = this._formatTimeLabel(dt);
 
-      // Highlight logic:
-      // - For superforecast (hourly), highlight when the exact hour matches
-      // - For forecast (3-hourly: 02,05,08,...), highlight when now falls within the row's 3-hour span
-      const sameDay = dtTz.toLocaleDateString('en-CA', tzOpt) === nowDayKey;
+      const sameDay = this._getDayKey(dt) === nowDayKey;
       let isCurrentHour = false;
       if (source === 'superforecastdata') {
-        isCurrentHour = sameDay && (dtTz.getHours() === nowHour);
+        isCurrentHour = sameDay && (this._getHour(dt) === nowHour);
       } else {
-        // Treat each cell as covering [dt, dt + 3h)
-        const rowStart = dtTz.getTime();
-        const rowEnd = rowStart + 3 * 60 * 60 * 1000;
-        const nowMs = nowTz.getTime();
+        const rowStart = dt.getTime();
+        const rowEnd = rowStart + FORECAST_INTERVAL_MS;
         isCurrentHour = sameDay && nowMs >= rowStart && nowMs < rowEnd;
       }
 
       const timeClasses = [isAlert ? 'alert' : '', isCurrentHour ? 'current-hour' : ''].filter(Boolean).join(' ');
 
-
-
-      // Format weather icon
       const getWeatherIcon = (cloudPct, rainMm, isNight) => {
         if (cloudPct == null) return "mdi:weather-cloudy";
 
@@ -684,35 +702,35 @@ class HaWfCard extends HTMLElement {
           <div class="forecast-cell-value ${timeClasses}">${timeStr}</div>
 
           ${(() => {
-            const bg = getColorForWind(row.wind_speed_kn);
+            const bg = getColorForWind(windSpeed);
             const fg = this._getContrastTextColor(bg);
-            return `<div class="forecast-cell-value" style="background:${bg};color:${fg};">${row.wind_speed_kn?.toFixed(0) ?? '-'}</div>`;
+            return `<div class="forecast-cell-value" style="background:${bg};color:${fg};">${this._formatNumber(windSpeed, 0)}</div>`;
           })()}
 
           ${(() => {
-            const bg = getColorForWind(row.wind_gust_kn);
+            const bg = getColorForWind(gustSpeed);
             const fg = this._getContrastTextColor(bg);
-            return `<div class="forecast-cell-value" style="background:${bg};color:${fg};">${row.wind_gust_kn?.toFixed(0) ?? '-'}</div>`;
+            return `<div class="forecast-cell-value" style="background:${bg};color:${fg};">${this._formatNumber(gustSpeed, 0)}</div>`;
           })()}
 
 
           <div class="forecast-cell-value icon">${windDirIcon}</div>
 
           ${(() => {
-            const bg = getColorForTemperature(row.temperature_c);
+            const bg = getColorForTemperature(temperature);
             const fg = this._getContrastTextColor(bg);
-            return `<div class="forecast-cell-value icon" style="background:${bg};color:${fg};">${row.temperature_c?.toFixed(1) ?? '-'}</div>`;
+            return `<div class="forecast-cell-value icon" style="background:${bg};color:${fg};">${this._formatNumber(temperature, 1)}</div>`;
           })()}
 
           <div class="forecast-cell-value icon">
-              <ha-icon icon="${getWeatherIcon(row.cloud_cover_pct, row.rain_mm, row.night_hour)}" style="--mdc-icon-size: 16px;" title="${row.cloud_cover_pct?.toFixed(0) ?? '?'}% cloud, ${row.rain_mm?.toFixed(1) ?? '0'}mm rain"></ha-icon>
+              <ha-icon icon="${getWeatherIcon(cloudCover, rainAmount, row.night_hour)}" style="--mdc-icon-size: 16px;" title="${this._formatNumber(cloudCover, 0, '?')}% cloud, ${this._formatNumber(rainAmount, 1, '0.0')}mm rain"></ha-icon>
           </div>
 
-          <div class="forecast-cell-value">${(row.rain_mm > 0 ? row.rain_mm.toFixed(1) : '-')}</div>
+          <div class="forecast-cell-value">${rainAmount > 0 ? this._formatNumber(rainAmount, 1) : '-'}</div>
 
-          <div class="forecast-cell-value">${row.air_pressure_hpa?.toFixed(0) ?? '-'}</div>
+          <div class="forecast-cell-value">${this._formatNumber(pressure, 0)}</div>
           <div class="forecast-cell-value icon">${waveDirIcon}</div>
-          <div class="forecast-cell-value">${row.wave_height_m?.toFixed(1) ?? '-'}m<br>${row.wave_interval_s?.toFixed(0) ?? '-'} sec</div>
+          <div class="forecast-cell-value">${this._formatMeasurement(waveHeight, 1, 'm')}<br>${this._formatMeasurement(waveInterval, 0, ' sec')}</div>
         </div>
       `;
     }).join('');
@@ -720,6 +738,66 @@ class HaWfCard extends HTMLElement {
 
     // Apply night visibility toggle
     this._applyNightVisibility();
+  }
+
+  _getLocaleTimeZoneOptions() {
+    return this._timeZone ? { timeZone: this._timeZone } : {};
+  }
+
+  _getDayKey(date) {
+    return date.toLocaleDateString('en-CA', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      ...this._getLocaleTimeZoneOptions(),
+    });
+  }
+
+  _formatDayLabel(date) {
+    return date.toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      ...this._getLocaleTimeZoneOptions(),
+    });
+  }
+
+  _formatTimeLabel(date) {
+    return date.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      ...this._getLocaleTimeZoneOptions(),
+    });
+  }
+
+  _getHour(date) {
+    return Number(date.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      hour12: false,
+      ...this._getLocaleTimeZoneOptions(),
+    }));
+  }
+
+  _toFiniteNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  _formatNumber(value, digits = 0, fallback = '-') {
+    return value == null ? fallback : value.toFixed(digits);
+  }
+
+  _formatMeasurement(value, digits, unit, fallback = '-') {
+    return value == null ? fallback : `${value.toFixed(digits)}${unit}`;
+  }
+
+  _escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;');
   }
 
 
@@ -791,6 +869,7 @@ class HaWfCard extends HTMLElement {
 
     subtitle.textContent = msg;
     footer.textContent = '';
+    footer.classList.remove('warning');
     datesRow.innerHTML = '';
     forecastTable.innerHTML = '';
     this._scheduleGridRowSync();
@@ -1265,11 +1344,11 @@ class HaWfCardEditor extends HTMLElement {
   _normalizeAlert(alert) {
     if (!alert) return null;
     return {
-      speed_min: Number.isFinite(alert.speed_min) ? Number(alert.speed_min) : undefined,
+      speed_min: this._parseFiniteNumber(alert.speed_min) ?? undefined,
       angles: Array.isArray(alert.angles)
         ? alert.angles.map((range) => ({
-          from: Number.isFinite(range?.from) ? Number(range.from) : undefined,
-          to: Number.isFinite(range?.to) ? Number(range.to) : undefined,
+          from: this._parseFiniteNumber(range?.from) ?? undefined,
+          to: this._parseFiniteNumber(range?.to) ?? undefined,
         }))
         : [],
     };
@@ -1361,6 +1440,11 @@ class HaWfCardEditor extends HTMLElement {
 
   _normalizeDeg(value) {
     return ((Number(value) % 360) + 360) % 360;
+  }
+
+  _parseFiniteNumber(value) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
   }
 
   _escape(value) {
