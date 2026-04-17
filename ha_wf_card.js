@@ -7,6 +7,7 @@ const css = `
 .title-block {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0px;
   padding: 12px 16px 12px 16px;
 }
@@ -14,6 +15,7 @@ const css = `
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   min-width: 32px;
   min-height: 32px;
 }
@@ -28,6 +30,7 @@ const css = `
   display: flex;
   flex-direction: column;
   justify-content: center;
+  flex: 1 1 160px;
   min-width: 0;
 }
 .card-title {
@@ -56,12 +59,15 @@ const css = `
   gap: 10px;
   align-items: center;
   margin-left: auto;
+  flex: 0 0 auto;
   flex-wrap: wrap;
+  min-width: max-content;
 }
 .control-group {
   display: flex;
   gap: 4px;
   align-items: center;
+  flex: 0 0 auto;
 }
 .control-group[hidden] {
   display: none;
@@ -306,6 +312,20 @@ ha-icon.rotated {
   font-size: 0.8rem;
   margin-left: 6px;
   user-select: none;
+}
+
+@media (max-width: 720px) {
+  .title-block {
+    gap: 8px;
+  }
+
+  .controls {
+    flex: 1 0 100%;
+    min-width: 0;
+    margin-left: 0;
+    justify-content: flex-end;
+    padding-top: 4px;
+  }
 }
 
 
