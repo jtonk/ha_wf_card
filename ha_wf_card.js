@@ -318,6 +318,7 @@ const GRID_GAP_PX = 8;
 const GRID_STEP_PX = GRID_ROW_PX + GRID_GAP_PX;
 const DEFAULT_TITLE = 'Kite Forecast';
 const FORECAST_INTERVAL_MS = 3 * 60 * 60 * 1000;
+const SUPERFORECAST_INTERVAL_MS = 60 * 60 * 1000;
 const WIND_SCALE_COLORS = [
   "#9700ff", "#6400ff", "#3200ff", "#0032ff", "#0064ff", "#0096ff", "#00c7ff",
   "#00e6f0", "#25c192", "#11d411", "#00e600", "#00fa00", "#b8ff61", "#fffe00",
@@ -332,13 +333,9 @@ class HaWfCard extends HTMLElement {
     this._alertConfig = config.alert || null;
     this._showNight = config.show_night ?? false;
     this._defaultSource = config.default_source || 'forecastdata';
-    if (typeof config.timezone === 'string') {
-      this._timeZone = config.timezone.toLowerCase() === 'utc'
-        ? 'UTC'
-        : config.timezone;
-    } else {
-      this._timeZone = undefined;
-    }
+    this._timeZone = this._normalizeTimeZone(config.timezone);
+    this._displayTimeZone = this._timeZone;
+    this._spotTimeZone = undefined;
     this._selectedSource = null;
     this._lastStateObj = null;
     this._activeDay = null;
@@ -536,6 +533,8 @@ class HaWfCard extends HTMLElement {
     const footer = this.querySelector("#footer");
     const datesRow = this.querySelector("#dates-row");
     const forecastTable = this.querySelector("#forecast-table");
+    this._spotTimeZone = this._getSpotTimeZone(stateObj);
+    this._displayTimeZone = this._timeZone ?? this._spotTimeZone;
     const tzOpt = this._getLocaleTimeZoneOptions();
     const spot_name = stateObj.attributes.spot_name;
     const prefix = source === 'superforecastdata' ? 'superforecast' : 'forecast';
@@ -582,11 +581,20 @@ class HaWfCard extends HTMLElement {
       groupedByDay[dayKey].push(row);
     });
 
-    const dayEntries = Object.entries(groupedByDay);
+    const dayEntries = Object.entries(groupedByDay)
+      .map(([day, rows]) => [
+        day,
+        [...rows].sort((left, right) => new Date(left.datetime) - new Date(right.datetime)),
+      ])
+      .sort(([, leftRows], [, rightRows]) => new Date(leftRows[0].datetime) - new Date(rightRows[0].datetime));
     if (!dayEntries.length) {
       this._clearDisplay("Forecast data contains no valid rows");
       return;
     }
+
+    dayEntries.forEach(([day, rows]) => {
+      groupedByDay[day] = rows;
+    });
 
     if (!this._activeDay || !groupedByDay[this._activeDay]) {
       const todayKey = this._getDayKey(now);
@@ -647,12 +655,14 @@ class HaWfCard extends HTMLElement {
       <div class="forecast-body"></div>
     `;
 
-    const nowDayKey = this._getDayKey(now);
-    const nowHour = this._getHour(now);
     const nowMs = now.getTime();
+    const activeRows = groupedByDay[this._activeDay];
+    const fallbackIntervalMs = source === 'superforecastdata'
+      ? SUPERFORECAST_INTERVAL_MS
+      : FORECAST_INTERVAL_MS;
 
     const body = forecastTable.querySelector(".forecast-body");
-    const rowsHtml = groupedByDay[this._activeDay].map(row => {
+    const rowsHtml = activeRows.map((row, index) => {
       const nightClass = row.night_hour ? 'night' : '';
       const rotateDir = deg => ((deg + 180) % 360);
       const windSpeed = this._toFiniteNumber(row.wind_speed_kn);
@@ -677,16 +687,13 @@ class HaWfCard extends HTMLElement {
       const dt = new Date(row.datetime);
       const isAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg, row.night_hour);
       const timeStr = this._formatTimeLabel(dt);
-
-      const sameDay = this._getDayKey(dt) === nowDayKey;
-      let isCurrentHour = false;
-      if (source === 'superforecastdata') {
-        isCurrentHour = sameDay && (this._getHour(dt) === nowHour);
-      } else {
-        const rowStart = dt.getTime();
-        const rowEnd = rowStart + FORECAST_INTERVAL_MS;
-        isCurrentHour = sameDay && nowMs >= rowStart && nowMs < rowEnd;
-      }
+      const rowStart = dt.getTime();
+      const nextRow = activeRows[index + 1];
+      const nextRowStart = nextRow ? new Date(nextRow.datetime).getTime() : NaN;
+      const rowEnd = Number.isFinite(nextRowStart) && nextRowStart > rowStart
+        ? nextRowStart
+        : rowStart + fallbackIntervalMs;
+      const isCurrentHour = nowMs >= rowStart && nowMs < rowEnd;
 
       const timeClasses = [isAlert ? 'alert' : '', isCurrentHour ? 'current-hour' : ''].filter(Boolean).join(' ');
 
@@ -754,7 +761,38 @@ class HaWfCard extends HTMLElement {
   }
 
   _getLocaleTimeZoneOptions() {
-    return this._timeZone ? { timeZone: this._timeZone } : {};
+    return this._displayTimeZone ? { timeZone: this._displayTimeZone } : {};
+  }
+
+  _getSpotTimeZone(stateObj) {
+    const candidates = [
+      stateObj?.attributes?.spot_timezone,
+      stateObj?.attributes?.spotTimeZone,
+      stateObj?.attributes?.['Spot timezone'],
+    ];
+
+    for (const candidate of candidates) {
+      const timeZone = this._normalizeTimeZone(candidate);
+      if (timeZone) {
+        return timeZone;
+      }
+    }
+
+    return undefined;
+  }
+
+  _normalizeTimeZone(value) {
+    if (typeof value !== 'string') return undefined;
+    const timeZone = value.trim();
+    if (!timeZone) return undefined;
+    const normalized = timeZone.toLowerCase() === 'utc' ? 'UTC' : timeZone;
+
+    try {
+      Intl.DateTimeFormat('en-US', { timeZone: normalized });
+      return normalized;
+    } catch (_error) {
+      return undefined;
+    }
   }
 
   _getDayKey(date) {
@@ -782,14 +820,6 @@ class HaWfCard extends HTMLElement {
       hour12: false,
       ...this._getLocaleTimeZoneOptions(),
     });
-  }
-
-  _getHour(date) {
-    return Number(date.toLocaleTimeString('en-GB', {
-      hour: '2-digit',
-      hour12: false,
-      ...this._getLocaleTimeZoneOptions(),
-    }));
   }
 
   _toFiniteNumber(value) {
@@ -1117,7 +1147,7 @@ class HaWfCardEditor extends HTMLElement {
             </div>
             <div class="field">
               <ha-form id="timezone-form"></ha-form>
-              <div class="field-hint">Default (current) uses the viewer's timezone.</div>
+              <div class="field-hint">Default (current) uses the spot timezone from the entity when available.</div>
             </div>
             <div class="field switch-field">
               <ha-formfield label="Show night hours by default">
