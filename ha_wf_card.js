@@ -358,7 +358,7 @@ class HaWfCard extends HTMLElement {
               <div class="subtitle" id="subtitle"></div>
             </div>
             <div class="controls" id="controls-container">
-              <div class="control-group">
+              <div class="control-group" id="night-control">
                 <span class="toggle-label">Night</span>
                 <label class="toggle-switch" title="Toggle night hours">
                   <input type="checkbox" id="toggle-night" ${this._showNight ? 'checked' : ''}>
@@ -482,12 +482,21 @@ class HaWfCard extends HTMLElement {
     const stateObj = this._hass.states[entity];
     if (!stateObj) return;
 
+    const controlsContainer = this.querySelector("#controls-container");
+    const nightControl = this.querySelector("#night-control");
     const sourceControl = this.querySelector("#source-control");
     const sourceToggle = this.querySelector("#toggle-source");
     const hasSuper = Array.isArray(stateObj.attributes.superforecastdata);
     const hasForecast = Array.isArray(stateObj.attributes.forecastdata);
+    const hasAnyForecast = hasSuper || hasForecast;
     const canToggleSource = hasSuper && hasForecast;
 
+    if (controlsContainer) {
+      controlsContainer.hidden = !hasAnyForecast;
+    }
+    if (nightControl) {
+      nightControl.hidden = !hasAnyForecast;
+    }
     if (sourceControl) {
       sourceControl.hidden = !canToggleSource;
     }
