@@ -570,40 +570,34 @@ class HaWfCard extends HTMLElement {
       return WIND_SCALE_COLORS[Math.max(0, Math.min(WIND_SCALE_COLORS.length - 1, index))];
     };
 
-    const groupedByDay = {};
-    data.forEach(row => {
-      const dt = new Date(row.datetime);
-      if (isNaN(dt.getTime())) return;
+    const sortedRows = data
+      .filter((row) => {
+        const dt = new Date(row.datetime);
+        return !isNaN(dt.getTime());
+      })
+      .sort((left, right) => new Date(left.datetime) - new Date(right.datetime));
+    const rowsPerDay = this._getRowsPerDay(source);
+    const dayEntries = [];
 
-      const dayKey = this._getDayKey(dt);
-
-      if (!groupedByDay[dayKey]) groupedByDay[dayKey] = [];
-      groupedByDay[dayKey].push(row);
-    });
-
-    const dayEntries = Object.entries(groupedByDay)
-      .map(([day, rows]) => [
-        day,
-        [...rows].sort((left, right) => new Date(left.datetime) - new Date(right.datetime)),
-      ])
-      .sort(([, leftRows], [, rightRows]) => new Date(leftRows[0].datetime) - new Date(rightRows[0].datetime));
+    for (let index = 0; index < sortedRows.length; index += rowsPerDay) {
+      const rows = sortedRows.slice(index, index + rowsPerDay);
+      if (!rows.length) continue;
+      dayEntries.push([`day-${dayEntries.length}`, rows]);
+    }
     if (!dayEntries.length) {
       this._clearDisplay("Forecast data contains no valid rows");
       return;
     }
 
-    dayEntries.forEach(([day, rows]) => {
-      groupedByDay[day] = rows;
-    });
+    const groupedByDay = Object.fromEntries(dayEntries);
 
     if (!this._activeDay || !groupedByDay[this._activeDay]) {
-      const todayKey = this._getDayKey(now);
-      this._activeDay = groupedByDay[todayKey] ? todayKey : dayEntries[0][0];
+      this._activeDay = dayEntries[0][0];
     }
 
     datesRow.innerHTML = dayEntries.map(([day, rows]) => {
       const activeClass = day === this._activeDay ? 'active' : '';
-      const displayDay = this._formatDayLabel(new Date(rows[0].datetime));
+      const displayDay = this._formatDataDayLabel(new Date(rows[0].datetime));
 
       const windBars = rows.map(row => {
         const windSpeed = this._toFiniteNumber(row.wind_speed_kn);
@@ -764,6 +758,10 @@ class HaWfCard extends HTMLElement {
     return this._displayTimeZone ? { timeZone: this._displayTimeZone } : {};
   }
 
+  _getDataDayTimeZoneOptions() {
+    return this._spotTimeZone ? { timeZone: this._spotTimeZone } : {};
+  }
+
   _getSpotTimeZone(stateObj) {
     const candidates = [
       stateObj?.attributes?.spot_timezone,
@@ -795,22 +793,17 @@ class HaWfCard extends HTMLElement {
     }
   }
 
-  _getDayKey(date) {
-    return date.toLocaleDateString('en-CA', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      ...this._getLocaleTimeZoneOptions(),
-    });
-  }
-
-  _formatDayLabel(date) {
+  _formatDataDayLabel(date) {
     return date.toLocaleDateString('en-GB', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
-      ...this._getLocaleTimeZoneOptions(),
+      ...this._getDataDayTimeZoneOptions(),
     });
+  }
+
+  _getRowsPerDay(source) {
+    return source === 'superforecastdata' ? 24 : 8;
   }
 
   _formatTimeLabel(date) {
