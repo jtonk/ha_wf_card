@@ -353,8 +353,6 @@ class HaWfCard extends HTMLElement {
     this._alertConfig = config.alert || null;
     this._showNight = config.show_night ?? false;
     this._defaultSource = config.default_source || 'forecastdata';
-    this._timeZone = this._normalizeTimeZone(config.timezone);
-    this._displayTimeZone = this._timeZone;
     this._spotTimeZone = undefined;
     this._selectedSource = null;
     this._lastStateObj = null;
@@ -554,7 +552,6 @@ class HaWfCard extends HTMLElement {
     const datesRow = this.querySelector("#dates-row");
     const forecastTable = this.querySelector("#forecast-table");
     this._spotTimeZone = this._getSpotTimeZone(stateObj);
-    this._displayTimeZone = this._timeZone ?? this._spotTimeZone;
     const tzOpt = this._getLocaleTimeZoneOptions();
     const spot_name = stateObj.attributes.spot_name;
     const prefix = source === 'superforecastdata' ? 'superforecast' : 'forecast';
@@ -615,7 +612,7 @@ class HaWfCard extends HTMLElement {
       this._activeDay = dayEntries[0][0];
     }
 
-    const baseDataDay = this._getBaseDataDay(generatedDate, now);
+    const baseDataDay = this._getBaseDataDay(sortedRows[0]);
 
     datesRow.innerHTML = dayEntries.map(([day, rows], dayIndex) => {
       const activeClass = day === this._activeDay ? 'active' : '';
@@ -777,10 +774,6 @@ class HaWfCard extends HTMLElement {
   }
 
   _getLocaleTimeZoneOptions() {
-    return this._displayTimeZone ? { timeZone: this._displayTimeZone } : {};
-  }
-
-  _getDataDayTimeZoneOptions() {
     return this._spotTimeZone ? { timeZone: this._spotTimeZone } : {};
   }
 
@@ -831,13 +824,31 @@ class HaWfCard extends HTMLElement {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
-      ...this._getDataDayTimeZoneOptions(),
+      timeZone: 'UTC',
     });
   }
 
-  _getBaseDataDay(generatedDate, fallbackDate) {
-    const referenceDate = !isNaN(generatedDate.getTime()) ? generatedDate : fallbackDate;
-    return new Date(referenceDate.getTime());
+  _getBaseDataDay(firstRow) {
+    const rawDate = typeof firstRow?.datetime === 'string'
+      ? firstRow.datetime.slice(0, 10)
+      : '';
+    const match = rawDate.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+    if (match) {
+      const [, year, month, day] = match;
+      return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12));
+    }
+
+    const fallbackDate = new Date(firstRow?.datetime);
+    if (!isNaN(fallbackDate.getTime())) {
+      return new Date(Date.UTC(
+        fallbackDate.getUTCFullYear(),
+        fallbackDate.getUTCMonth(),
+        fallbackDate.getUTCDate(),
+        12,
+      ));
+    }
+
+    return new Date(Date.UTC(1970, 0, 1, 12));
   }
 
   _addDays(date, days) {
@@ -1137,13 +1148,13 @@ class HaWfCardEditor extends HTMLElement {
       default_source: 'forecastdata',
       ...config,
     };
+    delete this._config.timezone;
     this._render();
   }
 
   set hass(hass) {
     this._hass = hass;
     this._setupEntityForm();
-    this._setupTimeZoneForm();
   }
 
   connectedCallback() {
@@ -1182,10 +1193,6 @@ class HaWfCardEditor extends HTMLElement {
               </ha-formfield>
               <div class="field-hint">Turn this off to start on the regular forecast.</div>
             </div>
-            <div class="field">
-              <ha-form id="timezone-form"></ha-form>
-              <div class="field-hint">Default (current) uses the spot timezone from the entity when available.</div>
-            </div>
             <div class="field switch-field">
               <ha-formfield label="Show night hours by default">
                 <ha-switch id="show_night" data-field="show_night" ${this._config.show_night ? 'checked' : ''}></ha-switch>
@@ -1212,7 +1219,6 @@ class HaWfCardEditor extends HTMLElement {
     `;
 
     this._setupEntityForm();
-    this._setupTimeZoneForm();
 
     this.shadowRoot.querySelectorAll('ha-textfield').forEach((field) => {
       if (field.hasAttribute('value')) {
@@ -1357,41 +1363,10 @@ class HaWfCardEditor extends HTMLElement {
     form.addEventListener('value-changed', this._onEntityFormChanged);
   }
 
-  _setupTimeZoneForm() {
-    const form = this.shadowRoot?.querySelector('#timezone-form');
-    if (!form) return;
-
-    form.hass = this._hass;
-    form.data = { timezone: this._config.timezone ?? '__default__' };
-    form.schema = [{
-      name: 'timezone',
-      selector: {
-        select: {
-          mode: 'dropdown',
-          options: this._getTimeZoneOptions(),
-        },
-      },
-    }];
-    form.computeLabel = (schema) => schema.name === 'timezone' ? 'Timezone' : schema.name;
-
-    if (this._onTimeZoneFormChanged) {
-      form.removeEventListener('value-changed', this._onTimeZoneFormChanged);
-    }
-
-    this._onTimeZoneFormChanged = (ev) => {
-      ev.stopPropagation();
-      this._updateConfigValue('timezone', ev.detail?.value?.timezone);
-    };
-
-    form.addEventListener('value-changed', this._onTimeZoneFormChanged);
-  }
-
   _updateConfigValue(key, value) {
     const next = {};
     if (key === 'title') {
       next[key] = value || undefined;
-    } else if (key === 'timezone') {
-      next.timezone = !value || value === '__default__' ? undefined : value;
     } else if (key === 'default_source_switch') {
       next.default_source = value ? 'superforecastdata' : 'forecastdata';
     } else {
@@ -1408,6 +1383,9 @@ class HaWfCardEditor extends HTMLElement {
 
     if (!this._config.alert) {
       delete this._config.alert;
+    }
+    if ('timezone' in this._config) {
+      delete this._config.timezone;
     }
 
     this.dispatchEvent(new CustomEvent('config-changed', {
@@ -1484,19 +1462,6 @@ class HaWfCardEditor extends HTMLElement {
     }
 
     return `conic-gradient(${segments.join(', ')})`;
-  }
-
-  _getTimeZoneOptions() {
-    if (!this._timeZoneOptions) {
-      const values = typeof Intl?.supportedValuesOf === 'function'
-        ? Intl.supportedValuesOf('timeZone')
-        : [];
-      this._timeZoneOptions = [
-        { label: 'Default (current)', value: '__default__' },
-        ...values.map((timeZone) => ({ label: timeZone, value: timeZone })),
-      ];
-    }
-    return this._timeZoneOptions;
   }
 
   _formatRange(range) {

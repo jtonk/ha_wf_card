@@ -32,10 +32,8 @@ Copy the single file `ha_wf_card.js` to the `www` folder of your Home Assistant 
 - `show_night`: Set to `true` to show night hours.
 - `default_source`: `forecastdata` (default) or `superforecastdata`.
 - `alert`: Alert configuration for highlighting certain wind conditions during non-night hours only. see example below
-- `timezone`: Specify a valid [IANA timezone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) such as
-  `UTC` or `Europe/Amsterdam` to display all times in that zone. If omitted, times
-  are shown in the entity's `spot_timezone` when available, otherwise the end user's local timezone.
 - The card's icon is taken from the entity's `icon` attribute when available.
+- Times are shown in the entity's `spot_timezone` when available.
 
 ## Visual Editor
 
@@ -44,7 +42,6 @@ The card now includes a Home Assistant visual editor for all supported options:
 - entity selection
 - title
 - default forecast source
-- timezone override
 - default night visibility
 - alert highlighting
 
@@ -63,7 +60,6 @@ entity: sensor.windfinder_noordwijk
 title: Noordwijk
 show_night: false
 default_source: forecastdata
-timezone: Europe/Amsterdam
 alert:
   speed_min: 15
   angles:
