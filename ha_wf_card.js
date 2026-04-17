@@ -66,6 +66,11 @@ const css = `
 .control-group[hidden] {
   display: none;
 }
+.toggle-group {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
 .toggle-switch {
   position: relative;
   width: 40px;
@@ -481,17 +486,16 @@ class HaWfCard extends HTMLElement {
     const sourceToggle = this.querySelector("#toggle-source");
     const hasSuper = Array.isArray(stateObj.attributes.superforecastdata);
     const hasForecast = Array.isArray(stateObj.attributes.forecastdata);
-    const canToggleSource = hasForecast && hasSuper;
+    const canToggleSource = hasSuper && hasForecast;
 
     if (sourceControl) {
       sourceControl.hidden = !canToggleSource;
     }
-    if (sourceToggle) {
-      sourceToggle.disabled = !canToggleSource;
-    }
-
     let source = this._selectedSource;
     if (!source || !Array.isArray(stateObj.attributes[source])) {
+      source = null;
+    }
+    if (!source) {
       if (this.config.default_source && Array.isArray(stateObj.attributes[this.config.default_source])) {
         source = this.config.default_source;
       } else if (hasForecast) {
