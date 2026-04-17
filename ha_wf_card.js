@@ -595,9 +595,11 @@ class HaWfCard extends HTMLElement {
       this._activeDay = dayEntries[0][0];
     }
 
-    datesRow.innerHTML = dayEntries.map(([day, rows]) => {
+    const baseDataDay = this._getBaseDataDay(generatedDate, now);
+
+    datesRow.innerHTML = dayEntries.map(([day, rows], dayIndex) => {
       const activeClass = day === this._activeDay ? 'active' : '';
-      const displayDay = this._formatDataDayLabel(new Date(rows[0].datetime));
+      const displayDay = this._formatDataDayLabel(this._addDays(baseDataDay, dayIndex));
 
       const windBars = rows.map(row => {
         const windSpeed = this._toFiniteNumber(row.wind_speed_kn);
@@ -763,14 +765,25 @@ class HaWfCard extends HTMLElement {
   }
 
   _getSpotTimeZone(stateObj) {
+    const attributes = stateObj?.attributes ?? {};
     const candidates = [
-      stateObj?.attributes?.spot_timezone,
-      stateObj?.attributes?.spotTimeZone,
-      stateObj?.attributes?.['Spot timezone'],
+      attributes.spot_timezone,
+      attributes.spotTimeZone,
+      attributes['Spot timezone'],
     ];
 
     for (const candidate of candidates) {
       const timeZone = this._normalizeTimeZone(candidate);
+      if (timeZone) {
+        return timeZone;
+      }
+    }
+
+    for (const [key, value] of Object.entries(attributes)) {
+      const normalizedKey = key.toLowerCase().replace(/[\s_-]+/g, '');
+      if (normalizedKey !== 'spottimezone') continue;
+
+      const timeZone = this._normalizeTimeZone(value);
       if (timeZone) {
         return timeZone;
       }
@@ -800,6 +813,17 @@ class HaWfCard extends HTMLElement {
       month: 'short',
       ...this._getDataDayTimeZoneOptions(),
     });
+  }
+
+  _getBaseDataDay(generatedDate, fallbackDate) {
+    const referenceDate = !isNaN(generatedDate.getTime()) ? generatedDate : fallbackDate;
+    return new Date(referenceDate.getTime());
+  }
+
+  _addDays(date, days) {
+    const nextDate = new Date(date.getTime());
+    nextDate.setUTCDate(nextDate.getUTCDate() + days);
+    return nextDate;
   }
 
   _getRowsPerDay(source) {
