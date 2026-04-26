@@ -1154,13 +1154,18 @@ class HaWfCardEditor extends HTMLElement {
   }
 
   set hass(hass) {
+    const previousCanSelectSuperforecast = this._canSelectSuperforecast();
     this._hass = hass;
-    if (this._config?.default_source === 'superforecastdata' && !this._canSelectSuperforecast()) {
+    const canSelectSuperforecast = this._canSelectSuperforecast();
+
+    if (this._config?.default_source === 'superforecastdata' && !canSelectSuperforecast) {
       this._updateConfig({ default_source: 'forecastdata' }, { render: true });
       return;
     }
+
     this._setupEntityForm();
-    if (this.shadowRoot) {
+
+    if (this.shadowRoot && previousCanSelectSuperforecast !== canSelectSuperforecast) {
       this._render();
     }
   }
@@ -1358,20 +1363,25 @@ class HaWfCardEditor extends HTMLElement {
     if (!form) return;
 
     form.hass = this._hass;
-    form.data = { entity: this._config.entity ?? '' };
+    const entity = this._config.entity ?? '';
+    if ((form.data?.entity ?? '') !== entity) {
+      form.data = { entity };
+    }
     form.schema = [{ name: 'entity', required: true, selector: { entity: {} } }];
     form.computeLabel = (schema) => schema.name === 'entity' ? 'Entity' : schema.name;
 
-    if (this._onEntityFormChanged) {
-      form.removeEventListener('value-changed', this._onEntityFormChanged);
+    if (!this._onEntityFormChanged) {
+      this._onEntityFormChanged = (ev) => {
+        ev.stopPropagation();
+        this._updateConfigValue('entity', ev.detail?.value?.entity);
+      };
     }
 
-    this._onEntityFormChanged = (ev) => {
-      ev.stopPropagation();
-      this._updateConfigValue('entity', ev.detail?.value?.entity);
-    };
-
-    form.addEventListener('value-changed', this._onEntityFormChanged);
+    if (this._entityForm !== form) {
+      this._entityForm?.removeEventListener('value-changed', this._onEntityFormChanged);
+      form.addEventListener('value-changed', this._onEntityFormChanged);
+      this._entityForm = form;
+    }
   }
 
   _updateConfigValue(key, value) {
