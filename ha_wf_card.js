@@ -635,11 +635,9 @@ class HaWfCard extends HTMLElement {
       this._activeDay = dayEntries[0][0];
     }
 
-    const baseDataDay = this._getBaseDataDay(sortedRows[0]);
-
-    datesRow.innerHTML = dayEntries.map(([day, rows], dayIndex) => {
+    datesRow.innerHTML = dayEntries.map(([day, rows]) => {
       const activeClass = day === this._activeDay ? 'active' : '';
-      const displayDay = this._formatDataDayLabel(this._addDays(baseDataDay, dayIndex));
+      const displayDay = this._formatDataDayLabel(rows[0]?.datetime);
 
       const windBars = rows.map(row => {
         const windSpeed = this._toFiniteNumber(row.wind_speed_kn);
@@ -847,42 +845,17 @@ class HaWfCard extends HTMLElement {
     return undefined;
   }
 
-  _formatDataDayLabel(date) {
-    return date.toLocaleDateString('en-GB', {
+  _formatDataDayLabel(value) {
+    const parsedDate = new Date(value);
+    if (isNaN(parsedDate.getTime())) {
+      return '-';
+    }
+    return parsedDate.toLocaleDateString('en-GB', {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
-      timeZone: 'UTC',
+      ...this._getLocaleTimeZoneOptions(),
     });
-  }
-
-  _getBaseDataDay(firstRow) {
-    const rawDate = typeof firstRow?.datetime === 'string'
-      ? firstRow.datetime.slice(0, 10)
-      : '';
-    const match = rawDate.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
-    if (match) {
-      const [, year, month, day] = match;
-      return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), 12));
-    }
-
-    const fallbackDate = new Date(firstRow?.datetime);
-    if (!isNaN(fallbackDate.getTime())) {
-      return new Date(Date.UTC(
-        fallbackDate.getUTCFullYear(),
-        fallbackDate.getUTCMonth(),
-        fallbackDate.getUTCDate(),
-        12,
-      ));
-    }
-
-    return new Date(Date.UTC(1970, 0, 1, 12));
-  }
-
-  _addDays(date, days) {
-    const nextDate = new Date(date.getTime());
-    nextDate.setUTCDate(nextDate.getUTCDate() + days);
-    return nextDate;
   }
 
   _getRowsPerDay(source) {
