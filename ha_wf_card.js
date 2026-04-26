@@ -369,20 +369,118 @@ const WIND_SCALE_COLORS = [
   "#c8321d", "#b4191d", "#aa001d", "#b40032", "#c80064", "#fe0096"
 ];
 
+function stableSerialize(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.keys(value)
+      .filter((key) => value[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`);
+    return `{${entries.join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function normalizeAlertConfig(alert) {
+  if (!alert) return undefined;
+
+  const normalized = {
+    angles: Array.isArray(alert.angles)
+      ? alert.angles
+        .map((range) => {
+          const from = Number(range?.from);
+          const to = Number(range?.to);
+          return {
+            ...(Number.isFinite(from) ? { from } : {}),
+            ...(Number.isFinite(to) ? { to } : {}),
+          };
+        })
+      : [],
+  };
+
+  const speedMin = Number(alert.speed_min);
+  if (Number.isFinite(speedMin)) {
+    normalized.speed_min = speedMin;
+  }
+
+  return normalized;
+}
+
+function normalizeCardConfig(config = {}) {
+  const normalized = {
+    ...config,
+    show_night: config.show_night ?? false,
+    default_source: config.default_source || 'forecastdata',
+  };
+
+  if (!normalized.title) {
+    delete normalized.title;
+  }
+
+  const alert = normalizeAlertConfig(normalized.alert);
+  if (alert) {
+    normalized.alert = alert;
+  } else {
+    delete normalized.alert;
+  }
+
+  delete normalized.timezone;
+  return normalized;
+}
+
 class HaWfCard extends HTMLElement {
   setConfig(config) {
     if (!config.entity) throw new Error("Entity is required");
-    this.config = config;
-    this._alertConfig = config.alert || null;
-    this._showNight = config.show_night ?? false;
-    this._defaultSource = config.default_source || 'forecastdata';
-    this._spotTimeZone = undefined;
-    this._selectedSource = null;
-    this._lastStateObj = null;
-    this._activeDay = null;
-    this._gridRows = DEFAULT_GRID_ROWS;
-    this._gridRowSyncFrame = 0;
+    const normalizedConfig = normalizeCardConfig(config);
+    const nextConfigKey = stableSerialize(normalizedConfig);
+    if (this._configKey === nextConfigKey) {
+      return;
+    }
 
+    const previousEntity = this.config?.entity;
+    const previousDefaultSource = this._defaultSource;
+    const previousAlertKey = stableSerialize(normalizeAlertConfig(this.config?.alert));
+    const hadShell = !!this.querySelector('ha-card');
+
+    this._configKey = nextConfigKey;
+    this.config = normalizedConfig;
+    this._alertConfig = normalizedConfig.alert || null;
+    this._showNight = normalizedConfig.show_night;
+    this._defaultSource = normalizedConfig.default_source;
+    this._gridRows = this._gridRows || DEFAULT_GRID_ROWS;
+    this._gridRowSyncFrame = this._gridRowSyncFrame || 0;
+
+    if (!hadShell) {
+      this._renderCardShell();
+      this._bindCardEvents();
+    }
+
+    if (previousEntity !== normalizedConfig.entity) {
+      this._spotTimeZone = undefined;
+      this._selectedSource = null;
+      this._lastStateObj = null;
+      this._activeDay = null;
+    } else if (previousDefaultSource !== this._defaultSource) {
+      this._selectedSource = this._defaultSource;
+    }
+
+    this._syncCardShell();
+
+    if (this._hass && (
+      previousEntity !== normalizedConfig.entity
+      || previousDefaultSource !== this._defaultSource
+      || previousAlertKey !== stableSerialize(normalizeAlertConfig(this._alertConfig))
+      || !hadShell
+    )) {
+      this._updateFromSelectedSource();
+    } else {
+      this._applyNightVisibility();
+    }
+  }
+
+  _renderCardShell() {
     this.innerHTML = `
       <style>${css}</style>
 
@@ -419,7 +517,27 @@ class HaWfCard extends HTMLElement {
         <div class="footer" id="footer"></div>
       </ha-card>
     `;
+    this._syncCardShell();
+  }
 
+  _syncCardShell() {
+    const title = this.querySelector('.card-title');
+    if (title) {
+      title.textContent = this.config.title || DEFAULT_TITLE;
+    }
+
+    const nightToggle = this.querySelector("#toggle-night");
+    if (nightToggle) {
+      nightToggle.checked = this._showNight;
+    }
+
+    const sourceToggle = this.querySelector("#toggle-source");
+    if (sourceToggle && !this._selectedSource) {
+      sourceToggle.checked = this._defaultSource === 'superforecastdata';
+    }
+  }
+
+  _bindCardEvents() {
     const refreshIcon = this.querySelector('#refresh-icon');
     if (refreshIcon) {
       refreshIcon.onclick = () => {
@@ -440,9 +558,6 @@ class HaWfCard extends HTMLElement {
       //this.querySelector("#source-label").textContent = checked ? 'Superforecast' : 'Forecast';
       this._updateFromSelectedSource();
     };
-
-    // Initialize selected source
-    //this._selectedSource = this._defaultSource;
   }
 
   getGridOptions() {
@@ -1144,12 +1259,14 @@ const editorCss = `
 
 class HaWfCardEditor extends HTMLElement {
   setConfig(config) {
-    this._config = {
-      show_night: false,
-      default_source: 'forecastdata',
-      ...config,
-    };
-    delete this._config.timezone;
+    const normalizedConfig = normalizeCardConfig(config);
+    const nextConfigKey = stableSerialize(normalizedConfig);
+    if (this._configKey === nextConfigKey) {
+      return;
+    }
+
+    this._configKey = nextConfigKey;
+    this._config = normalizedConfig;
     this._render();
   }
 
@@ -1404,17 +1521,17 @@ class HaWfCardEditor extends HTMLElement {
   }
 
   _updateConfig(changes, options = {}) {
-    this._config = {
+    const nextConfig = normalizeCardConfig({
       ...this._config,
       ...changes,
-    };
+    });
+    const nextConfigKey = stableSerialize(nextConfig);
+    if (this._configKey === nextConfigKey) {
+      return;
+    }
 
-    if (!this._config.alert) {
-      delete this._config.alert;
-    }
-    if ('timezone' in this._config) {
-      delete this._config.timezone;
-    }
+    this._config = nextConfig;
+    this._configKey = nextConfigKey;
 
     this.dispatchEvent(new CustomEvent('config-changed', {
       detail: { config: this._config },
