@@ -73,52 +73,8 @@ const css = `
 .control-group[hidden] {
   display: none;
 }
-.toggle-group {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-.toggle-switch {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  display: inline-block;
-}
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: var(--toggle-off-color, #888);
-  transition: 0.4s;
-  border-radius: 11px;
-  border: 1px solid var(--toggle-border-color, #666);
-}
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 2px;
-  bottom: 1.5px;
-  background-color: var(--toggle-thumb-color, white);
-  transition: 0.4s;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
-}
-input:checked + .slider {
-  background-color: var(--toggle-on-color, #4caf50);
-  border-color: var(--toggle-on-color, #4caf50);
-}
-input:checked + .slider:before {
-  transform: translateX(18px);
+.control-group ha-switch {
+  flex: 0 0 auto;
 }
 .footer {
   padding: 4px 12px;
@@ -496,17 +452,11 @@ class HaWfCard extends HTMLElement {
             <div class="controls" id="controls-container">
               <div class="control-group" id="night-control">
                 <span class="toggle-label">Night</span>
-                <label class="toggle-switch" title="Toggle night hours">
-                  <input type="checkbox" id="toggle-night" ${this._showNight ? 'checked' : ''}>
-                  <span class="slider"></span>
-                </label>
+                <ha-switch id="toggle-night" haptic title="Toggle night hours" aria-label="Toggle night hours" ${this._showNight ? 'checked' : ''}></ha-switch>
               </div>
               <div class="control-group" id="source-control">
                 <span class="toggle-label">Superforecast</span>
-                <label class="toggle-switch" title="Toggle forecast source (off=Forecast, on=Superforecast)">
-                  <input type="checkbox" id="toggle-source" ${this._defaultSource === 'superforecastdata' ? 'checked' : ''}>
-                  <span class="slider"></span>
-                </label>
+                <ha-switch id="toggle-source" haptic title="Toggle forecast source (off=Forecast, on=Superforecast)" aria-label="Toggle forecast source" ${this._defaultSource === 'superforecastdata' ? 'checked' : ''}></ha-switch>
               </div>
             </div>
           </div>
