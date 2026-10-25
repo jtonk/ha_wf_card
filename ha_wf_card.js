@@ -233,6 +233,9 @@ const css = `
   background-color: var(--chip-background-color, #ff0000 );
   color: var(--primary-text-color);
 }
+ha-card.hide-night .forecast-row.night {
+  display: none;
+}
 .forecast-cell-value {
   display: table-cell;
   padding: 2px;
@@ -681,13 +684,19 @@ class HaWfCard extends HTMLElement {
         return !isNaN(dt.getTime());
       })
       .sort((left, right) => new Date(left.datetime) - new Date(right.datetime));
-    const rowsPerDay = this._getRowsPerDay(source);
     const dayEntries = [];
+    const dateFormatter = new Intl.DateTimeFormat('en-CA', {
+      year: 'numeric', month: '2-digit', day: '2-digit', ...tzOpt,
+    });
 
-    for (let index = 0; index < sortedRows.length; index += rowsPerDay) {
-      const rows = sortedRows.slice(index, index + rowsPerDay);
-      if (!rows.length) continue;
-      dayEntries.push([`day-${dayEntries.length}`, rows]);
+    for (const row of sortedRows) {
+      const day = dateFormatter.format(new Date(row.datetime));
+      const lastEntry = dayEntries[dayEntries.length - 1];
+      if (lastEntry?.[0] === day) {
+        lastEntry[1].push(row);
+      } else {
+        dayEntries.push([day, [row]]);
+      }
     }
     if (!dayEntries.length) {
       this._clearDisplay("Forecast data contains no valid rows");
@@ -733,7 +742,9 @@ class HaWfCard extends HTMLElement {
     datesRow.querySelectorAll('.date-tab').forEach(tab => {
       tab.onclick = () => {
         this._activeDay = tab.dataset.day;
-        this._updateFromSelectedSource();
+        datesRow.querySelector('.date-tab.active')?.classList.remove('active');
+        tab.classList.add('active');
+        this._renderSelectedDay();
       };
     });
 
@@ -754,109 +765,112 @@ class HaWfCard extends HTMLElement {
       <div class="forecast-body"></div>
     `;
 
-    const nowMs = now.getTime();
-    const activeRows = groupedByDay[this._activeDay];
-    const fallbackIntervalMs = source === 'superforecastdata'
-      ? SUPERFORECAST_INTERVAL_MS
-      : FORECAST_INTERVAL_MS;
+    const body = forecastTable.querySelector('.forecast-body');
+    this._renderSelectedDay = () => {
+      const nowMs = Date.now();
+      const activeRows = groupedByDay[this._activeDay];
+      const fallbackIntervalMs = source === 'superforecastdata'
+        ? SUPERFORECAST_INTERVAL_MS
+        : FORECAST_INTERVAL_MS;
 
-    const body = forecastTable.querySelector(".forecast-body");
-    const rowsHtml = activeRows.map((row, index) => {
-      const nightClass = row.night_hour ? 'night' : '';
-      const rotateDir = deg => ((deg + 180) % 360);
-      const windSpeed = this._toFiniteNumber(row.wind_speed_kn);
-      const gustSpeed = this._toFiniteNumber(row.wind_gust_kn);
-      const windDirection = this._toFiniteNumber(row.wind_direction_deg);
-      const temperature = this._toFiniteNumber(row.temperature_c);
-      const cloudCover = this._toFiniteNumber(row.cloud_cover_pct);
-      const rainAmount = this._toFiniteNumber(row.rain_mm);
-      const pressure = this._toFiniteNumber(row.air_pressure_hpa);
-      const waveDirection = this._toFiniteNumber(row.wave_direction_deg);
-      const waveHeight = this._toFiniteNumber(row.wave_height_m);
-      const waveInterval = this._toFiniteNumber(row.wave_interval_s);
+      const rowsHtml = activeRows.map((row, index) => {
+        const nightClass = row.night_hour ? 'night' : '';
+        const rotateDir = deg => ((deg + 180) % 360);
+        const windSpeed = this._toFiniteNumber(row.wind_speed_kn);
+        const gustSpeed = this._toFiniteNumber(row.wind_gust_kn);
+        const windDirection = this._toFiniteNumber(row.wind_direction_deg);
+        const temperature = this._toFiniteNumber(row.temperature_c);
+        const cloudCover = this._toFiniteNumber(row.cloud_cover_pct);
+        const rainAmount = this._toFiniteNumber(row.rain_mm);
+        const pressure = this._toFiniteNumber(row.air_pressure_hpa);
+        const waveDirection = this._toFiniteNumber(row.wave_direction_deg);
+        const waveHeight = this._toFiniteNumber(row.wave_height_m);
+        const waveInterval = this._toFiniteNumber(row.wave_interval_s);
 
-      const windDirIcon = (windDirection != null)
-        ? `<ha-icon icon="mdi:navigation" class="rotated" style="transform: rotate(${rotateDir(windDirection)}deg); --mdc-icon-size: 16px;"></ha-icon>`
-        : '';
+        const windDirIcon = (windDirection != null)
+          ? `<ha-icon icon="mdi:navigation" class="rotated" style="transform: rotate(${rotateDir(windDirection)}deg); --mdc-icon-size: 16px;"></ha-icon>`
+          : '';
 
-      const waveDirIcon = (waveDirection != null)
-        ? `<ha-icon icon="mdi:navigation" class="rotated" style="transform: rotate(${rotateDir(waveDirection)}deg); --mdc-icon-size: 16px;" ></ha-icon>`
-        : '';
+        const waveDirIcon = (waveDirection != null)
+          ? `<ha-icon icon="mdi:navigation" class="rotated" style="transform: rotate(${rotateDir(waveDirection)}deg); --mdc-icon-size: 16px;" ></ha-icon>`
+          : '';
 
-      const dt = new Date(row.datetime);
-      const isAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg, row.night_hour);
-      const timeStr = this._formatTimeLabel(dt);
-      const rowStart = dt.getTime();
-      const nextRow = activeRows[index + 1];
-      const nextRowStart = nextRow ? new Date(nextRow.datetime).getTime() : NaN;
-      const rowEnd = Number.isFinite(nextRowStart) && nextRowStart > rowStart
-        ? nextRowStart
-        : rowStart + fallbackIntervalMs;
-      const isCurrentHour = nowMs >= rowStart && nowMs < rowEnd;
+        const dt = new Date(row.datetime);
+        const isAlert = this._checkAlertCondition(row.wind_speed_kn, row.wind_direction_deg, row.night_hour);
+        const timeStr = this._formatTimeLabel(dt);
+        const rowStart = dt.getTime();
+        const nextRow = activeRows[index + 1];
+        const nextRowStart = nextRow ? new Date(nextRow.datetime).getTime() : NaN;
+        const rowEnd = Number.isFinite(nextRowStart) && nextRowStart > rowStart
+          ? nextRowStart
+          : rowStart + fallbackIntervalMs;
+        const isCurrentHour = nowMs >= rowStart && nowMs < rowEnd;
 
-      const timeClasses = [isAlert ? 'alert' : '', isCurrentHour ? 'current-hour' : ''].filter(Boolean).join(' ');
+        const timeClasses = [isAlert ? 'alert' : '', isCurrentHour ? 'current-hour' : ''].filter(Boolean).join(' ');
 
-      const getWeatherIcon = (cloudPct, rainMm, isNight) => {
-        if (cloudPct == null) return "mdi:weather-cloudy";
+        const getWeatherIcon = (cloudPct, rainMm, isNight) => {
+          if (cloudPct == null) return "mdi:weather-cloudy";
 
-        const rain = rainMm ?? 0;
+          const rain = rainMm ?? 0;
 
-        if (cloudPct <= 10) {
-          return isNight ? "mdi:weather-night" : (rain > 0 ? "mdi:weather-partly-rainy" : "mdi:weather-sunny");
-        }
+          if (cloudPct <= 10) {
+            return isNight ? "mdi:weather-night" : (rain > 0 ? "mdi:weather-partly-rainy" : "mdi:weather-sunny");
+          }
 
-        if (cloudPct <= 50) {
-          if (rain > 0) return "mdi:weather-partly-rainy";
-          return isNight ? "mdi:weather-night-partly-cloudy" : "mdi:weather-partly-cloudy";
-        }
+          if (cloudPct <= 50) {
+            if (rain > 0) return "mdi:weather-partly-rainy";
+            return isNight ? "mdi:weather-night-partly-cloudy" : "mdi:weather-partly-cloudy";
+          }
 
-        if (rain > 5) return "mdi:weather-pouring";
-        if (rain > 0.2) return "mdi:weather-rainy";
+          if (rain > 5) return "mdi:weather-pouring";
+          if (rain > 0.2) return "mdi:weather-rainy";
 
-        return "mdi:weather-cloudy";
-      };
+          return "mdi:weather-cloudy";
+        };
 
-      return `
-        <div class="forecast-row ${nightClass}">
-          <div class="forecast-cell-value ${timeClasses}">${timeStr}</div>
+        return `
+          <div class="forecast-row ${nightClass}">
+            <div class="forecast-cell-value ${timeClasses}">${timeStr}</div>
 
-          ${(() => {
-            const bg = getColorForWind(windSpeed);
-            const fg = this._getContrastTextColor(bg);
-            return `<div class="forecast-cell-value" style="background:${bg};color:${fg};">${this._formatNumber(windSpeed, 0)}</div>`;
-          })()}
+            ${(() => {
+              const bg = getColorForWind(windSpeed);
+              const fg = this._getContrastTextColor(bg);
+              return `<div class="forecast-cell-value" style="background:${bg};color:${fg};">${this._formatNumber(windSpeed, 0)}</div>`;
+            })()}
 
-          ${(() => {
-            const bg = getColorForWind(gustSpeed);
-            const fg = this._getContrastTextColor(bg);
-            return `<div class="forecast-cell-value" style="background:${bg};color:${fg};">${this._formatNumber(gustSpeed, 0)}</div>`;
-          })()}
+            ${(() => {
+              const bg = getColorForWind(gustSpeed);
+              const fg = this._getContrastTextColor(bg);
+              return `<div class="forecast-cell-value" style="background:${bg};color:${fg};">${this._formatNumber(gustSpeed, 0)}</div>`;
+            })()}
 
 
-          <div class="forecast-cell-value icon">${windDirIcon}</div>
+            <div class="forecast-cell-value icon">${windDirIcon}</div>
 
-          ${(() => {
-            const bg = getColorForTemperature(temperature);
-            const fg = this._getContrastTextColor(bg);
-            return `<div class="forecast-cell-value icon" style="background:${bg};color:${fg};">${this._formatNumber(temperature, 1)}</div>`;
-          })()}
+            ${(() => {
+              const bg = getColorForTemperature(temperature);
+              const fg = this._getContrastTextColor(bg);
+              return `<div class="forecast-cell-value icon" style="background:${bg};color:${fg};">${this._formatNumber(temperature, 1)}</div>`;
+            })()}
 
-          <div class="forecast-cell-value icon">
-              <ha-icon icon="${getWeatherIcon(cloudCover, rainAmount, row.night_hour)}" style="--mdc-icon-size: 16px;" title="${this._formatNumber(cloudCover, 0, '?')}% cloud, ${this._formatNumber(rainAmount, 1, '0.0')}mm rain"></ha-icon>
+            <div class="forecast-cell-value icon">
+                <ha-icon icon="${getWeatherIcon(cloudCover, rainAmount, row.night_hour)}" style="--mdc-icon-size: 16px;" title="${this._formatNumber(cloudCover, 0, '?')}% cloud, ${this._formatNumber(rainAmount, 1, '0.0')}mm rain"></ha-icon>
+            </div>
+
+            <div class="forecast-cell-value">${rainAmount > 0 ? this._formatNumber(rainAmount, 1) : '-'}</div>
+
+            <div class="forecast-cell-value">${this._formatNumber(pressure, 0)}</div>
+            <div class="forecast-cell-value icon">${waveDirIcon}</div>
+            <div class="forecast-cell-value">${this._formatMeasurement(waveHeight, 1, 'm')}<br>${this._formatMeasurement(waveInterval, 0, ' sec')}</div>
           </div>
+        `;
+      }).join('');
+      body.innerHTML = rowsHtml;
 
-          <div class="forecast-cell-value">${rainAmount > 0 ? this._formatNumber(rainAmount, 1) : '-'}</div>
-
-          <div class="forecast-cell-value">${this._formatNumber(pressure, 0)}</div>
-          <div class="forecast-cell-value icon">${waveDirIcon}</div>
-          <div class="forecast-cell-value">${this._formatMeasurement(waveHeight, 1, 'm')}<br>${this._formatMeasurement(waveInterval, 0, ' sec')}</div>
-        </div>
-      `;
-    }).join('');
-    body.innerHTML = rowsHtml;
-
-    // Apply night visibility toggle
-    this._applyNightVisibility();
+      // Apply night visibility toggle
+      this._applyNightVisibility();
+    };
+    this._renderSelectedDay();
   }
 
   _getLocaleTimeZoneOptions() {
@@ -923,10 +937,6 @@ class HaWfCard extends HTMLElement {
     });
   }
 
-  _getRowsPerDay(source) {
-    return source === 'superforecastdata' ? 24 : 8;
-  }
-
   _formatTimeLabel(date) {
     return date.toLocaleTimeString('en-GB', {
       hour: '2-digit',
@@ -991,10 +1001,7 @@ class HaWfCard extends HTMLElement {
 
 
   _applyNightVisibility() {
-    const rows = this.querySelectorAll('.forecast-row.night');
-    rows.forEach(row => {
-      row.style.display = this._showNight ? '' : 'none';
-    });
+    this.querySelector('ha-card')?.classList.toggle('hide-night', !this._showNight);
     this._scheduleGridRowSync();
   }
 
@@ -1014,7 +1021,6 @@ class HaWfCard extends HTMLElement {
       this._gridRows = nextRows;
 
       this.dispatchEvent(new Event('iron-resize', { bubbles: true, composed: true }));
-      window.dispatchEvent(new Event('resize'));
     });
   }
 
